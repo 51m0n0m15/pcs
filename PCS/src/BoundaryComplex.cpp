@@ -20,19 +20,18 @@ using namespace CGAL;
 
 _Vertex *v = NULL;	// vertex array
 int vertexCount = 0, triangleCount = 0, insertedPoints = 0;
-static char *staticFilename;
 struct Triangle;
 struct Tetrahedron;
 typedef enum { NC_CONFORM, NC_VERTEXCONNECTED, NC_ISOLATED, NC_NONPLANAR } NCType;
 
 
-/*void setCloud()
-{
+
+BoundaryComplex::BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in){
 	vertexCount = cloud_in->size();	// TODO: why? (for knot.pts)
 	v = new _Vertex[vertexCount];
 	_Vertex vertex;
 	int i = 0;
-	for(PointCloud<PointXYZRGB>::const_iterator it = cloud_in->points.begin(); it != cloud_in->points.end(); ++it){
+	for(pcl::PointCloud<pcl::PointXYZRGB>::const_iterator it = cloud_in->points.begin(); it != cloud_in->points.end(); ++it){
 		Vector3D vec;
 		vec[0] = it->x;
 		vec[1] = it->y;
@@ -42,10 +41,6 @@ typedef enum { NC_CONFORM, NC_VERTEXCONNECTED, NC_ISOLATED, NC_NONPLANAR } NCTyp
 		v[i] = vertex;
 		i++;
 	}
-}*/
-
-BoundaryComplex::BoundaryComplex(){
-
 }
 
 
@@ -831,15 +826,13 @@ void createBoundaryComplex(Dt *dt)
  // reconstruct triangulation from point set
  
 //void connect3D(list<Triangle *> &boundaryTriangles)
-void connect3D()
+void BoundaryComplex::connect3D()
 {
-	string path = string(staticFilename);
-	int posDot = path.find_last_of(".");
-	string filenameStr = path.substr(0, posDot);
-
 	dt = construct3DDelaunayTriangulation();
+	cout << "Delaunay Triangulation done" << endl;
 
 	createAggregateDataStructure();
+	cout << "Aggregate Datastructure created" << endl;
 
 	criterionType = 1;	// criterion: longest edge in triangle
 	createBoundaryComplex(dt);
@@ -852,10 +845,6 @@ void connect3D()
 		if (currTri->exists())
 			boundaryTriangles.push_back(currTri);
 	}*/
-}
-
-void BoundaryComplex::fu(){
-	cout << "fu" << endl;
 }
 
 

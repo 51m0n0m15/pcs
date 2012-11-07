@@ -327,18 +327,12 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\BoundaryComplex.cpp" />
-    <ClCompile Include="src\Connect3D.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="src\DisjointSets.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h" />
     <ClInclude Include="src\BoundaryComplex.h" />
-    <ClInclude Include="src\Connect3D.h">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-    </ClInclude>
     <ClInclude Include="src\DisjointSets.h" />
     <ClInclude Include="src\geometry.h" />
     <ClInclude Include="src\Vector3D.h" />

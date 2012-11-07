@@ -244,7 +244,6 @@ PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 		cloud_filtered = cloud_f;
 	}
 
-
 	/*
 	// Creating the KdTree object for the search method of the extraction
 	search::KdTree<PointXYZRGB>::Ptr tree (new search::KdTree<pcl::PointXYZRGB>);
@@ -334,17 +333,10 @@ int main (int argc, char** argv)
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_knn (new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_bc (new pcl::PointCloud<pcl::PointXYZRGB>);
 
-
-
-	//testing purposes
-
-	BoundaryComplex *bc = new BoundaryComplex();
-	bc->fu();
-
-
-	//end testing purposes
-
-
+	//construct the boundary complex for filtered input data
+	BoundaryComplex *bc = new BoundaryComplex(cloud_input);
+	bc->connect3D();
+	cout << "Boundary Complex constructed" << endl;
 	
 	//handle user commands
 	string in;
