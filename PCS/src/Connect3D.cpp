@@ -38,7 +38,8 @@ typedef enum { NC_CONFORM, NC_VERTEXCONNECTED, NC_ISOLATED, NC_NONPLANAR } NCTyp
 
 
 //convert pcl-point cloud to the data stucture used in this class..
-void setCloud(PointCloud<PointXYZRGB>::Ptr cloud_in)
+//void setCloud(PointCloud<PointXYZRGB>::Ptr cloud_in)
+/*void setCloud()
 {
 	vertexCount = cloud_in->size();	// TODO: why? (for knot.pts)
 	v = new _Vertex[vertexCount];
@@ -54,13 +55,12 @@ void setCloud(PointCloud<PointXYZRGB>::Ptr cloud_in)
 		v[i] = vertex;
 		i++;
 	}
-}
+}*/
 
-Connect3D::Connect3D(PointCloud<PointXYZRGB>::Ptr cloud_in)
+//Connect3D::Connect3D(PointCloud<PointXYZRGB>::Ptr cloud_in)
+Connect3D::Connect3D()
 {
-	showMode = 0;
-	setCloud(cloud_in);
-	timerFirst = true;
+	//setCloud(cloud_in);
 }
 
 

@@ -1,3 +1,4 @@
+#include <pcl/point_types.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
@@ -13,7 +14,7 @@
 #include <regex>
 #include <boost/thread/thread.hpp>
 
-#include "Connect3D.h"
+#include "BoundaryComplex.h"
 
 using namespace pcl;
 
@@ -243,10 +244,6 @@ PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 		cloud_filtered = cloud_f;
 	}
 
-	Connect3D *bc = new Connect3D(cloud_filtered);
-	bc->connect3D();
-
-
 
 	/*
 	// Creating the KdTree object for the search method of the extraction
@@ -336,6 +333,17 @@ int main (int argc, char** argv)
 	//these are the different segmented point clouds
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_knn (new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_bc (new pcl::PointCloud<pcl::PointXYZRGB>);
+
+
+
+	//testing purposes
+
+	BoundaryComplex *bc = new BoundaryComplex();
+	bc->fu();
+
+
+	//end testing purposes
+
 
 	
 	//handle user commands
