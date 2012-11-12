@@ -928,7 +928,7 @@ BoundaryComplex::BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in
 
 
 //TODO
-void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold){
+void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold, int clusterNo){
 
 }
 
