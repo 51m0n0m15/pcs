@@ -23,8 +23,8 @@ using namespace pcl;
 pcl::PointCloud<PointXYZRGB>::Ptr cloud_input(new PointCloud<PointXYZRGB>());
 
 //these are the different segmented point clouds
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_knn(new pcl::PointCloud<pcl::PointXYZRGB>);
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_bc(new pcl::PointCloud<pcl::PointXYZRGB>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_knn;//(new pcl::PointCloud<pcl::PointXYZRGB>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_bc;//(new pcl::PointCloud<pcl::PointXYZRGB>);
 
 //for cluster-labelling
 vector<int> *cl_plane_knn;
@@ -63,17 +63,16 @@ PointCloud<PointXYZRGB>::Ptr filter(PointCloud<PointXYZRGB>::Ptr cloud_in){
 - maximale iterationen für plane segmentation (momentan: 100)
 - abbruch der plane-segmentation-schleife (momentan: letzte ebene kleiner als cloud_input->size()/10)
 */
-PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
+void planeKnn(){
 
 	int clusterNo=1;
 
-	PointCloud<PointXYZRGB>::Ptr cloud_filtered (cloud_in), cloud_f(new PointCloud<PointXYZRGB>);
-	PointCloud<PointXYZRGB>::Ptr cloud_segmented (new PointCloud<PointXYZRGB>);
+	PointCloud<PointXYZRGB>::Ptr cloud_filtered (cloud_input), cloud_f(new PointCloud<PointXYZRGB>);
 
 	// calculate distance threshold
 	PointXYZRGB min;
 	PointXYZRGB max;
-	getMinMax3D(*cloud_in, min, max);
+	getMinMax3D(*cloud_input, min, max);
 	float maxExp = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z));
 
 	// Create the segmentation object for the planar model and set all the parameters
@@ -111,24 +110,15 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 		extract.filter (*cloud_plane);
 
 		//!!!!!!BREAK CONDITION!!!!!!!
-		if(cloud_plane->size() < cloud_in->points.size()/10) break;
+		if(cloud_plane->size() < cloud_input->points.size()/10) break;
 		//size_last_plane = cloud_plane->size();
 
 
-		//color points of planar component and add them to segmentation solution
-		int r = std::rand()%256;
-		int g = std::rand()%256;
-		int b = std::rand()%256;
+		//add planar component to segmentation solution
 		int offset=0;
 		int pos=0;
 		vector<int> *indices = extract.getIndices().get();
 		for(int i=0; i<cloud_plane->size(); i++){
-			PointXYZRGB point(r,g,b);
-			point.x=cloud_plane->points[i].x;
-			point.y=cloud_plane->points[i].y;
-			point.z=cloud_plane->points[i].z;
-			cloud_segmented->push_back(point);
-
 			//update the cluster-vector..
 			while(pos <= indices->at(i)+offset){
 				if(cl_plane_knn->at(pos)!=0) offset++;
@@ -152,7 +142,7 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	vector<PointIndices> cluster_indices;
 	EuclideanClusterExtraction<PointXYZRGB> ec;
 	ec.setClusterTolerance (maxExp/config::clusterDistThreshold);
-	ec.setMinClusterSize (cloud_in->size()/config::minClusterSize);
+	ec.setMinClusterSize (cloud_input->size()/config::minClusterSize);
 	//ec.setMaxClusterSize (cloud_in->size()/2);
 	ec.setSearchMethod (tree);
 	ec.setInputCloud (cloud_filtered);
@@ -161,26 +151,13 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	vector<int> cl_euclid_part(cloud_filtered->size());
 	for (vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
 	{
-
-		int r = std::rand()%256;
-		int g = std::rand()%256;
-		int b = std::rand()%256;
 		int pointcounter=0;
 		for (vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); pit++){
-			PointXYZRGB point(r,g,b);
-			point.x=cloud_filtered->points[*pit].x;
-			point.y=cloud_filtered->points[*pit].y;
-			point.z=cloud_filtered->points[*pit].z;
-			cloud_segmented->points.push_back (point); 
 			pointcounter++;
 
 			//update temporal euclidean clustering vector
 			cl_euclid_part[*pit]=clusterNo;
 		}
-
-		cloud_segmented->width = cloud_segmented->points.size ();
-		cloud_segmented->height = 1;
-		cloud_segmented->is_dense = true;
 
 		cout << "Cluster "<<clusterNo<<": " << pointcounter << " data points." << endl;
 
@@ -199,44 +176,29 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	}
 
 
+	//color the plane_knn-cloud
+	vector<vector<int>> colors(clusterNo-1);
+	for(int i=0; i<clusterNo-1; i++){
+		vector<int> c(3);
+		c[0]=std::rand()%256;
+		c[1]=std::rand()%256;
+		c[2]=std::rand()%256;
+		colors[i]=c;
+	}
 
-	cout << "segmentation completed" << endl;
-
-	//debug
 	for(int i=0; i<cl_plane_knn->size(); i++){
-		if(cl_plane_knn->at(i)==1){
-			cloud_input->points.at(i).r=255;
-			cloud_input->points.at(i).g=0;
-			cloud_input->points.at(i).b=0;
-		}
-		if(cl_plane_knn->at(i)==2){
-			cloud_input->points.at(i).r=0;
-			cloud_input->points.at(i).g=255;
-			cloud_input->points.at(i).b=0;
-		}
-		if(cl_plane_knn->at(i)==3){
-			cloud_input->points.at(i).r=0;
-			cloud_input->points.at(i).g=0;
-			cloud_input->points.at(i).b=255;
-		}
-		if(cl_plane_knn->at(i)==4){
-			cloud_input->points.at(i).r=255;
-			cloud_input->points.at(i).g=255;
-			cloud_input->points.at(i).b=0;
-		}
-		if(cl_plane_knn->at(i)==5){
-			cloud_input->points.at(i).r=0;
-			cloud_input->points.at(i).g=255;
-			cloud_input->points.at(i).b=255;
-		}
-		if(cl_plane_knn->at(i)==6){
-			cloud_input->points.at(i).r=255;
-			cloud_input->points.at(i).g=0;
-			cloud_input->points.at(i).b=255;
+		if(cl_plane_knn->at(i) > 0){
+			cloud_plane_knn->points[i].r = colors[cl_plane_knn->at(i)-1][0];
+			cloud_plane_knn->points[i].g = colors[cl_plane_knn->at(i)-1][1];
+			cloud_plane_knn->points[i].b = colors[cl_plane_knn->at(i)-1][2];
+		} else {
+			cloud_plane_knn->points[i].r = 0;
+			cloud_plane_knn->points[i].g = 0;
+			cloud_plane_knn->points[i].b = 0;
 		}
 	}
 
-	return cloud_segmented;
+	cout << "segmentation done" << endl;
 }
 
 
@@ -327,7 +289,7 @@ PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 
 	//TODO wolke faerben
 
-	cout << "segmentation completed" << endl;
+	cout << "segmentation done" << endl;
 
 	return cloud_segmented;
 }
@@ -369,9 +331,9 @@ int main (int argc, char** argv)
 	//downsampling
 	cloud_input=filter(cloud_input);
 
-	//copy for different cluster solutions
-	//cloud_plane_knn = *(new PointCloud<PointXYZRGB>::Ptr(cloud_input.get()));
-	//cloud_plane_bc = *(new PointCloud<PointXYZRGB>::Ptr(cloud_input.get()));
+	//copy for different cluster solutions (and color all points black)
+	cloud_plane_knn = *(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>( *(cloud_input.get()) )));
+	cloud_plane_bc = *(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>( *(cloud_input.get()) )));
 
 	//for cluster-labelling
 	cl_plane_knn = new vector<int>(cloud_input->size(), 0);
@@ -394,7 +356,7 @@ int main (int argc, char** argv)
 
 
 		if(string(in)=="planeknn"){
-			cloud_plane_knn = planeKnn(cloud_input);
+			planeKnn();
 			continue;
 		}
 		if(string(in)=="showplaneknn"){
