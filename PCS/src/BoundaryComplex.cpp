@@ -506,16 +506,23 @@ void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold,
 		unlabeled.erase(seed);
 		
 		while(!queue.empty()){
-			set<int> neighbors = getNeighbors(*(queue.begin()));
+			list<int>::iterator curPoint = queue.begin();
+			set<int> neighbors = getNeighbors(*curPoint);
 			queue.pop_front();
 
 			for(set<int>::iterator iter=neighbors.begin(); iter!=neighbors.end(); iter++){
 				set<int>::iterator neighbor = unlabeled.find(*iter);
 				if(neighbor!=unlabeled.end()){
-					//TODO: entfernungskriterium
-					queue.push_back(*neighbor);
-					cluster.insert(*neighbor);
-					unlabeled.erase(neighbor);
+					Vector3D v1 = v[*curPoint].vec;
+					Vector3D v2 = v[*neighbor].vec;
+					float distance = sqrt(pow(v1[0]-v2[0],2)+
+											pow(v1[1]-v2[1],2)+
+											pow(v1[2]-v2[2],2));
+					if(distance<=distThreshold){
+						queue.push_back(*neighbor);
+						cluster.insert(*neighbor);
+						unlabeled.erase(neighbor);
+					}
 				}
 			}
 		}
