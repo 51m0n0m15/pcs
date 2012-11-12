@@ -468,13 +468,10 @@ list<Triangle*> boundaryTriangles;
 
 
 set<int> BoundaryComplex::getNeighbors(int index){
-
 	set<int> neighbors;
-
 	for (list<Triangle>::iterator iter = dtTriangles.begin(); iter != dtTriangles.end(); iter++)
 	{
 		Triangle *currTri = &*iter;
-
 		if (currTri->exists()) {
 			bool indexFound = false;
 			for (int i = 0; i < 3; i++){
@@ -493,9 +490,46 @@ set<int> BoundaryComplex::getNeighbors(int index){
 }
 
 
-void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold, int clusterNo){
+void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold, int minClusterSize, int clusterNo){
+	set<int> unlabeled;
+	for(int i=0; i<clustering->size(); i++)
+		if(clustering->at(i)==0)
+			unlabeled.insert(i);
+	
+	while(!unlabeled.empty()){
+		list<int> queue;
+		set<int> cluster;
 
-	//TODO
+		set<int>::iterator seed = unlabeled.begin();
+		queue.push_back(*seed);
+		cluster.insert(*seed);
+		unlabeled.erase(seed);
+		
+		while(!queue.empty()){
+			set<int> neighbors = getNeighbors(*(queue.begin()));
+			queue.pop_front();
+
+			for(set<int>::iterator iter=neighbors.begin(); iter!=neighbors.end(); iter++){
+				set<int>::iterator neighbor = unlabeled.find(*iter);
+				if(neighbor!=unlabeled.end()){
+					//TODO: entfernungskriterium
+					queue.push_back(*neighbor);
+					cluster.insert(*neighbor);
+					unlabeled.erase(neighbor);
+				}
+			}
+		}
+
+		if(cluster.size()>=minClusterSize){
+			for(set<int>::iterator iter = cluster.begin(); iter!=cluster.end(); iter++){
+				clustering->at(*iter)=clusterNo;
+			}
+			cout << "Cluster "<<clusterNo<<": " << cluster.size() << " data points." << endl;
+			clusterNo++;
+		}
+
+	}
+	
 
 }
 

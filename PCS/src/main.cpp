@@ -290,13 +290,17 @@ void planeBc(){
 		cloud_filtered = cloud_f;
 	}
 
-	bc->doClustering(cl_plane_bc, maxExp/config::clusterDistThreshold, clusterNo);
+	//boundary-complex-clustering
+	bc->doClustering(cl_plane_bc, maxExp/config::clusterDistThreshold, cloud_input->size()/config::minClusterSize, clusterNo);
 
 
 
 	//color the plane_bc-cloud
-	vector<vector<int>> colors(clusterNo-1);
-	for(int i=0; i<clusterNo-1; i++){
+	for(vector<int>::iterator iter=cl_plane_bc->begin(); iter!=cl_plane_bc->end(); iter++)
+		if(*iter > clusterNo)
+			clusterNo=*iter;
+	vector<vector<int>> colors(clusterNo);
+	for(int i=0; i<clusterNo; i++){
 		vector<int> c(3);
 		c[0]=std::rand()%256;
 		c[1]=std::rand()%256;
