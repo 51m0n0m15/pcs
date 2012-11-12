@@ -10,7 +10,7 @@
 #include <CGAL/Triangulation_vertex_base_with_info_3.h>
 #include <CGAL/Triangulation_cell_base_with_info_3.h>
 
-#include "geometry.h"	//kann nur in source file inkludiert werden.
+#include "geometry.h"
 #include "base.h"
 #include "DisjointSets.h"
 
@@ -39,51 +39,51 @@ public:
 		_isOpen = false;
 		_NCType = NC_CONFORM;
 	}
-		
-	 //set index
+
+	//set index
 	void setIndex(int index){
 		_index = index;
 	}
 
-	 // get index
+	// get index
 	inline int index(){
 		return _index;
 	}
-	
-	 // set vertex classification
+
+	// set vertex classification
 	void setOpen(bool isOpen){
 		_isOpen = isOpen;
 	}
 
-	 // get vertex classification
-	 
+	// get vertex classification
+
 	inline bool isOpen(){
 		return _isOpen;
 	}
 
 #ifdef OBSOLETE
-	 // set vertex classification
+	// set vertex classification
 	void setHoleAdjacent(bool isHoleAdjacent){
 		_isHoleAdjacent = isHoleAdjacent;
 	}
 
-	 // get vertex classification
+	// get vertex classification
 	inline bool isHoleAdjacent(){
 		return _isHoleAdjacent;
 	}
 #endif
 
-	 // set vertex classification
+	// set vertex classification
 	void setNC(NCType type){
 		_NCType = type;
 	}
-		
-	 // get vertex classification
+
+	// get vertex classification
 	inline bool isNC(){
 		return (_NCType != NC_CONFORM);
 	}
-	
-	 // get non-conforming classification
+
+	// get non-conforming classification
 	inline NCType getNC()	{
 		return _NCType;
 	}
@@ -103,12 +103,12 @@ public:
 			_triangle[i] = NULL;
 	}
 
-	 // set label
+	// set label
 	void setLabel(int label){
 		_label = label;
 	}
 
-	 // get label
+	// get label
 	int label(){
 		return _label;
 	}
@@ -118,17 +118,17 @@ public:
 		_orientation = orientation;
 	}
 
-	 // get orientation
+	// get orientation
 	int orientation(){
 		return _orientation;
 	}
 
-	 // set triangle with given index
+	// set triangle with given index
 	void setTriangle(int index, Triangle *triangle){
 		_triangle[index] = triangle;
 	}
 
-	 // return triangle with given index
+	// return triangle with given index
 	inline Triangle *triangle(int index){
 		return _triangle[index];
 	}
@@ -173,18 +173,18 @@ public:
 		_cellIndex[1] = index1;
 	}
 
-	 // return a Delaunay halfedge for this edge
+	// return a Delaunay halfedge for this edge
 	DEdge dEdge(){
 		return DEdge(_cell, _cellIndex[0], _cellIndex[1]);
 	}
 
-	 // return Delaunay vertex
+	// return Delaunay vertex
 	inline const DVertex vertex(int index){
 		return _cell->vertex(_cellIndex[index]);
 	}
 
-	 // return index of Delaunay vertex
-	 // returns 2 if not in edge
+	// return index of Delaunay vertex
+	// returns 2 if not in edge
 	int index(DVertex vh){
 		int i = 0;
 		while ((i < 2) && (vertex(i) != vh))
@@ -199,43 +199,43 @@ public:
 			i++;
 		return (i == 2);
 	}
-	
-	 // set edge classification
+
+	// set edge classification
 	void setOpen(bool isOpen){
 		_isOpen = isOpen;
 	}
 
-	 // get edge classification
+	// get edge classification
 	bool isOpen(){
 		return _isOpen;
 	}
 
-	 //set edge classification
+	//set edge classification
 	void setNC(bool isNC){
 		_isNC = isNC;
 	}
 
-	 // get edge classification
+	// get edge classification
 	bool isNC(){
 		return _isNC;
 	}
 
-	 // set edge classification
+	// set edge classification
 	void setInteriorOC(bool isInteriorOC){
 		_isInteriorOC = isInteriorOC;
 	}
 
-	 // get edge classification
+	// get edge classification
 	bool isInteriorOC(){
 		return _isInteriorOC;
 	}
 
-	 // set edge classification
+	// set edge classification
 	void setInBoundary(bool inBoundary){
 		_inBoundary = inBoundary;
 	}
 
-	 // get edge classification
+	// get edge classification
 	bool inBoundary(){
 		return _inBoundary;
 	}
@@ -244,25 +244,25 @@ public:
 	bool exists();
 
 	// DEBUG:
-	 // output edge as v0-v1
+	// output edge as v0-v1
 	friend ostream& operator<<(ostream& os, const Edge &edge){
 		os << edge._cell->vertex(edge._cellIndex[0])->info().index() << "-" 
 			<< edge._cell->vertex(edge._cellIndex[1])->info().index();
 		return os;
 	}
-	
-	 // return index as int pair
+
+	// return index as int pair
 	IntPair index(){
 		return IntPair(vertex(0)->info().index(), vertex(1)->info().index());
 	}
 
-	 // test if it contains these vertices
+	// test if it contains these vertices
 	bool equals(int v0, int v1){
 		IntPair pair = index();
 		return ((pair.first == v0) && (pair.second == v1)) || ((pair.first == v1) && (pair.second == v0));
 	}
 
-	 // return length of edge
+	// return length of edge
 	float length(){
 		return Vector3D::distance(v[vertex(0)->info().index()].vec, v[vertex(1)->info().index()].vec);
 	}
@@ -290,13 +290,13 @@ public:
 		_indexInCell = index;
 	}
 
-	 // return index of triangle in cell
+	// return index of triangle in cell
 	const int indexInCell(){
 		return _indexInCell;
 	}
 
-	 // return index of given vertex (equal to index of opposite edge)
-	 // returns 3 if not in triangle
+	// return index of given vertex (equal to index of opposite edge)
+	// returns 3 if not in triangle
 	int index(DVertex currVertex){
 		int i = 0;
 		while ((i < 3) && (vertex(i) != currVertex))
@@ -304,8 +304,8 @@ public:
 		return i;
 	}
 
-	 // return index of given vertex (equal to index of opposite edge)
-	 // returns 3 if not in triangle
+	// return index of given vertex (equal to index of opposite edge)
+	// returns 3 if not in triangle
 	int index(Cell cell, DVertex currVertex){
 		int vIndex = index(currVertex);
 		if (vIndex != 3){
@@ -316,33 +316,33 @@ public:
 		return vIndex;
 	}
 
-	 // set existence state of triangle
+	// set existence state of triangle
 	void setExists(bool exists){
 		_exists = exists;
 	}
 
-	 // return if triangle exists
+	// return if triangle exists
 	inline bool exists(){
 		return _exists;
 	}
 
-	 // set if triangle is in RC
+	// set if triangle is in RC
 	void setInRC(bool isInRC){
 		_isInRC = isInRC;
 	}
 
-	 // return if triangle is in RC
+	// return if triangle is in RC
 	inline bool isInRC(){
 		return _isInRC;
 	}
 
-	 // return Delaunay vertex
+	// return Delaunay vertex
 	inline const DVertex vertex(int index){
 		int vIndex = tetraTriVertexIndices[indexInCell()][index];
 		return cell()->vertex(vIndex);
 	}
 
-	 // return Delaunay vertex
+	// return Delaunay vertex
 	inline const DVertex vertex(Cell cell, int index){
 		// test if in opposite cell
 		if (cell != _cell)
@@ -350,18 +350,18 @@ public:
 		return vertex(index);
 	}
 
-	 // set edge at given index
+	// set edge at given index
 	void setEdge(int index, Edge *edge){
 		_edge[index] = edge;
 	}
 
-	 // get edge for given index
-	 // NOTE: triangle is not oriented
+	// get edge for given index
+	// NOTE: triangle is not oriented
 	inline Edge *edge(int index){
 		return _edge[index];
 	}
 
-	 // return index of edge in triangle [0..2], 3 if it is not contained in triangle
+	// return index of edge in triangle [0..2], 3 if it is not contained in triangle
 	int index(Edge *edge){
 		int edgeIndex = 0;
 		while ((edgeIndex < 3) && (_edge[edgeIndex] != edge))
@@ -376,52 +376,52 @@ public:
 			index = 2 - index;	// if so, swap orientation
 		return edge(index);
 	}
-	
-	 // returns if triangle is finite
+
+	// returns if triangle is finite
 	const bool isFinite(){
 		int i = 0;
 		while ((i < 3) && !dt->is_infinite(vertex(i)))
 			i++;
 		return (i == 3);
 	}
-	
-	 // set edge classification
+
+	// set edge classification
 	void setOpen(bool isOpen){
 		_isOpen = isOpen;
 	}
-	
-	 // get edge classification
+
+	// get edge classification
 	inline bool isOpen(){
 		return _isOpen;
 	}
 
-	 // set label
+	// set label
 	void setLabel(int label){
 		_label = label;
 	}
 
-	 // get label
+	// get label
 	int label(){
 		return _label;
 	}
 
-	 // returns one adjacent cell
+	// returns one adjacent cell
 	const inline Cell cell(){
 		return _cell;
 	}
 
-	 // return index as int triple
+	// return index as int triple
 	const IntTriple index(){
 		return IntTriple(IntPair(vertex(0)->info().index(), vertex(1)->info().index()), vertex(2)->info().index());
 	}
 
-	 // returns a halftriangle for the triangle
+	// returns a halftriangle for the triangle
 	DTriangle halftriangle(){
 		return DTriangle(cell(), indexInCell());
 	}
 
 	// DEBUG:
-	 // output triangle as v0/v1/v2
+	// output triangle as v0/v1/v2
 	friend ostream& operator<<(ostream& os, const Triangle &triangle){
 		int i;
 		for (i = 0; i < 3; i++)	{
@@ -432,7 +432,7 @@ public:
 		return os;
 	}
 
-	 // test if triangle contains exactly these vertex indices
+	// test if triangle contains exactly these vertex indices
 	bool equals(int *vArray){
 		int i, _vArray[3];
 		for (i = 0; i < 3; i++)
@@ -456,7 +456,51 @@ map<IntPair, Edge> dtEdgeMap;	// key are vertex indices sorted ascendingly
 list<Triangle> dtTriangles;
 
 const char* timer_names[] = { "total", "reconstruct", "del3d", "struct", "boundary-complex", "spaces", "detect", "conform", "segment", "hole-filling", "inflate", "sculpture", "smooth",
-		"temp", "last" };
+	"temp", "last" };
+
+
+
+
+//########################################### BEGIN INTERESTING ######################################
+
+list<Triangle*> boundaryTriangles;
+
+
+
+set<int> BoundaryComplex::getNeighbors(int index){
+
+	set<int> neighbors;
+
+	for (list<Triangle>::iterator iter = dtTriangles.begin(); iter != dtTriangles.end(); iter++)
+	{
+		Triangle *currTri = &*iter;
+
+		if (currTri->exists()) {
+			bool indexFound = false;
+			for (int i = 0; i < 3; i++){
+				if(currTri->vertex(i)->info().index() == index)
+					indexFound=true;
+			}
+			if(indexFound){
+				for (int i = 0; i < 3; i++){
+					if(currTri->vertex(i)->info().index() != index)
+						neighbors.insert(currTri->vertex(i)->info().index());
+				}
+			}
+		}
+	}
+	return neighbors;
+}
+
+
+void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold, int clusterNo){
+
+	//TODO
+
+}
+
+//########################################### END INTERESTING ########################################
+
 
 
 
@@ -470,7 +514,7 @@ Dt *construct3DDelaunayTriangulation(){
 		vh->info().setIndex(i);
 	}
 
-//	cout << "DT3: finite: vertices=" << dt->number_of_vertices() << ", edges=" << dt->number_of_finite_edges() << ", faces=" << dt->number_of_finite_facets() << ", cells=" << dt->number_of_finite_cells() << endl;
+	//	cout << "DT3: finite: vertices=" << dt->number_of_vertices() << ", edges=" << dt->number_of_finite_edges() << ", faces=" << dt->number_of_finite_facets() << ", cells=" << dt->number_of_finite_cells() << endl;
 	cout << "DT3: all: vertices=" << (dt->number_of_vertices() + 1) << ", edges=" << dt->number_of_edges() << ", faces=" << dt->number_of_facets() << ", cells=" << dt->number_of_cells() << endl;
 
 	if ((int)dt->number_of_vertices() != vertexCount){
@@ -497,11 +541,11 @@ Dt *construct3DDelaunayTriangulation(){
 		_Vertex *newV = new _Vertex[vertexCount];
 
 		for (i = 0; i < vertexCount; i++){
-//			cout << i << ": " << vertexMap[i] << endl;
+			//			cout << i << ": " << vertexMap[i] << endl;
 			newV[i].vec = v[vertexMap[i]].vec;
 		}
 
-//		delete v;	// TODO: dirty
+		//		delete v;	// TODO: dirty
 		v = newV;
 	}
 	return dt;
@@ -509,7 +553,7 @@ Dt *construct3DDelaunayTriangulation(){
 
 
 int criterionType = -1;	// 0=circumradius, 1=longest edge, 2=area, 3=aspect ratio
- // calculate criterion for triangle (minimizing)
+// calculate criterion for triangle (minimizing)
 double getCriterionForTriangle(Triangle *triangle){
 	int i, triIndex[3];
 
@@ -524,33 +568,33 @@ double getCriterionForTriangle(Triangle *triangle){
 		return r;
 	}
 	else
-	if (criterionType == 1){
-		// criterion: longest edge in triangle (prefers also acute angles, small triangles)
-		float edge[3];
+		if (criterionType == 1){
+			// criterion: longest edge in triangle (prefers also acute angles, small triangles)
+			float edge[3];
 
-		for (i = 0; i < 3; i++)
-			edge[i] = Vector3D::distance(v[triIndex[i]].vec, v[triIndex[(i + 1) % 3]].vec);
+			for (i = 0; i < 3; i++)
+				edge[i] = Vector3D::distance(v[triIndex[i]].vec, v[triIndex[(i + 1) % 3]].vec);
 
-		sort(edge, edge + 3);	// determine longest edge
+			sort(edge, edge + 3);	// determine longest edge
 
-		return edge[2];
-	}
-	else
-	if (criterionType == 2){
-		// criterion: calculate triangle area
-		return calcTriangleArea(v[triIndex[0]].vec, v[triIndex[1]].vec, v[triIndex[2]].vec);
-	}
-	else
-	if (criterionType == 3){
-		// criterion: calculate triangle aspect ratio
-		return calcTriangleAspectRatio(v[triIndex[0]].vec, v[triIndex[1]].vec, v[triIndex[2]].vec);
-	}
-	// dummy
-	return 0.0;
+			return edge[2];
+		}
+		else
+			if (criterionType == 2){
+				// criterion: calculate triangle area
+				return calcTriangleArea(v[triIndex[0]].vec, v[triIndex[1]].vec, v[triIndex[2]].vec);
+			}
+			else
+				if (criterionType == 3){
+					// criterion: calculate triangle aspect ratio
+					return calcTriangleAspectRatio(v[triIndex[0]].vec, v[triIndex[1]].vec, v[triIndex[2]].vec);
+				}
+				// dummy
+				return 0.0;
 }
 
 
- // creates edge and triangle structures and links them to existing vertex/tetrahedron structure, to permit storing attributes
+// creates edge and triangle structures and links them to existing vertex/tetrahedron structure, to permit storing attributes
 void createAggregateDataStructure(){
 	int i, j;
 
@@ -566,7 +610,7 @@ void createAggregateDataStructure(){
 		Tetrahedron *currTetra = &ch->info();
 
 		// DEBUG
-//		cout << "tetra " << COUT_CELL(ch) << endl;
+		//		cout << "tetra " << COUT_CELL(ch) << endl;
 
 		bool triangleCreated[4];
 		Edge *edge[6];
@@ -594,7 +638,7 @@ void createAggregateDataStructure(){
 				//int vIndex[3];
 
 				//for (j = 0; j < 3; j++)
-//				//	vIndex[j] = (i + 1 + j) % 4;
+				//				//	vIndex[j] = (i + 1 + j) % 4;
 				//	vIndex[j] = tetraTriVertexIndices[i][j];
 
 				Triangle newTriangle(ch, i);
@@ -605,7 +649,7 @@ void createAggregateDataStructure(){
 				tetraStack.push(oppCH);
 
 				// DEBUG
-//				cout << "triangle " << *triangle << " created" << endl;
+				//				cout << "triangle " << *triangle << " created" << endl;
 			}
 
 			currTetra->setTriangle(i, triangle);	// reference triangle
@@ -646,7 +690,7 @@ void createAggregateDataStructure(){
 }
 
 
- // calculate criterion for triangles and return sorted map with its references
+// calculate criterion for triangles and return sorted map with its references
 void getSortedTriangleMap(multimap<double, Triangle *> &triMMap)
 {
 	// sort all triangles in delaunay graph by ascending triangle circumradius
@@ -664,18 +708,18 @@ void getSortedTriangleMap(multimap<double, Triangle *> &triMMap)
 
 
 
- // create boundary-complex for DG(P)
- // conditions: 1) all vertices interpolated, 2) all edges >=2 incident triangles, 3) one connected set
- // repeat until all conditions fulfilled
- // input: delaunay tetrahedralization
- // output: all triangles in boundary-complex marked as existing
+// create boundary-complex for DG(P)
+// conditions: 1) all vertices interpolated, 2) all edges >=2 incident triangles, 3) one connected set
+// repeat until all conditions fulfilled
+// input: delaunay tetrahedralization
+// output: all triangles in boundary-complex marked as existing
 void createBoundaryComplex(Dt *dt)
 {
 	int i, insertedTriangleCount = 0;
 
 	// initialize a tree for each vertex
 	int vTreeCount = dt->number_of_vertices();
-//	DisjointSets dSet(vTreeCount);
+	//	DisjointSets dSet(vTreeCount);
 	DisjointSets dSet(vertexCount);	// DIRTY! -> problems with false indices?
 
 	// get sorted triangle map
@@ -753,11 +797,11 @@ void createBoundaryComplex(Dt *dt)
 			if (edgeTriCount == 0)
 				newExtEdges.push_back(edge);
 			else
-			if (edgeTriCount == 1)
-			{
-				newNonExtEdges.push_back(edge);
-				inserted = true;
-			}
+				if (edgeTriCount == 1)
+				{
+					newNonExtEdges.push_back(edge);
+					inserted = true;
+				}
 		}
 
 		if (inserted)
@@ -808,8 +852,8 @@ void createBoundaryComplex(Dt *dt)
 
 
 /*
- * write triangulation to OFF-file
- */
+* write triangulation to OFF-file
+*/
 void writeOFFFile()
 {
 	int i;
@@ -883,8 +927,7 @@ void writeOFFFile()
 }
 
 
- // reconstruct triangulation from point set
-//void connect3D(list<Triangle *> &boundaryTriangles)
+// reconstruct triangulation from point set
 void BoundaryComplex::connect3D()
 {
 	dt = construct3DDelaunayTriangulation();
@@ -895,13 +938,13 @@ void BoundaryComplex::connect3D()
 	createBoundaryComplex(dt);
 
 	// put all boundary triangles into the list
-	/*for (list<Triangle>::iterator iter = dtTriangles.begin(); iter != dtTriangles.end(); iter++)
+	for (list<Triangle>::iterator iter = dtTriangles.begin(); iter != dtTriangles.end(); iter++)
 	{
 		Triangle *currTri = &*iter;
 
 		if (currTri->exists())
 			boundaryTriangles.push_back(currTri);
-	}*/
+	}
 
 	writeOFFFile();
 }
@@ -924,12 +967,6 @@ BoundaryComplex::BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in
 	}
 
 	connect3D();
-}
-
-
-//TODO
-void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold, int clusterNo){
-
 }
 
 
