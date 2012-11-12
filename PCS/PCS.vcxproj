@@ -327,12 +327,14 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\BoundaryComplex.cpp" />
+    <ClCompile Include="src\config.cpp" />
     <ClCompile Include="src\DisjointSets.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h" />
     <ClInclude Include="src\BoundaryComplex.h" />
+    <ClInclude Include="src\config.h" />
     <ClInclude Include="src\DisjointSets.h" />
     <ClInclude Include="src\geometry.h" />
     <ClInclude Include="src\Vector3D.h" />

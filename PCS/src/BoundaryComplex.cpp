@@ -26,23 +26,6 @@ typedef enum { NC_CONFORM, NC_VERTEXCONNECTED, NC_ISOLATED, NC_NONPLANAR } NCTyp
 
 
 
-BoundaryComplex::BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in){
-	vertexCount = cloud_in->size();	// TODO: why? (for knot.pts)
-	v = new _Vertex[vertexCount];
-	_Vertex vertex;
-	int i = 0;
-	for(pcl::PointCloud<pcl::PointXYZRGB>::const_iterator it = cloud_in->points.begin(); it != cloud_in->points.end(); ++it){
-		Vector3D vec;
-		vec[0] = it->x;
-		vec[1] = it->y;
-		vec[2] = it->z;
-
-		vertex.vec = vec;
-		v[i] = vertex;
-		i++;
-	}
-}
-
 
 class Vertex{
 private:
@@ -823,16 +806,90 @@ void createBoundaryComplex(Dt *dt)
 }
 
 
+
+/*
+ * write triangulation to OFF-file
+ */
+void writeOFFFile()
+{
+	int i;
+	string offFilenameStr = "boundaryComplex.off";
+	const char *offFilename = offFilenameStr.c_str();
+	ofstream fileOut(offFilename);
+
+	if (fileOut.is_open())
+	{
+		// count triangles
+		int triangleCount = 0;
+
+		for (list<Triangle>::iterator iter = dtTriangles.begin(); iter != dtTriangles.end(); iter++)
+		{
+			Triangle *currTri = &*iter;
+
+			if (currTri->exists())
+				triangleCount++;
+		}
+
+		// write OFF header
+		fileOut << "OFF" << endl;
+		fileOut << (int)dt->number_of_vertices() << " " << triangleCount << " 0" << endl;
+
+		// TODO: some vertex indices are higher than vertexCount: (up to 200 in ts-dragon): why? and if there are holes, need to compact them for triangle writing!
+
+		// write vertex list
+		for (Dt::Finite_vertices_iterator vhIter = dt->finite_vertices_begin(); vhIter != dt->finite_vertices_end(); vhIter++)
+		{
+			DVertex currVH = vhIter;
+			int vIndex = currVH->info().index();
+
+			if (vIndex != -1)
+			{
+				Vector3D vec = v[vIndex].vec;
+
+				for (i = 0; i < 3; i++)
+					fileOut << vec[i] << " ";
+
+				fileOut << endl;
+
+				// DEBUG
+				if (vIndex >= (int)dt->number_of_vertices())
+				{
+					cout << "v #" << vIndex << ">= " << (int)dt->number_of_vertices() << "(vertexcount)!" << endl;
+					assert(false);
+				}
+			}
+		}
+
+		// write triangle list
+		for (list<Triangle>::iterator iter = dtTriangles.begin(); iter != dtTriangles.end(); iter++)
+		{
+			Triangle *currTri = &*iter;
+
+			if (currTri->exists())
+			{
+				fileOut << "3 ";
+
+				for (i = 0; i < 3; i++)
+					fileOut << currTri->vertex(i)->info().index() << " ";
+
+				fileOut << endl;
+			}
+		}
+
+		fileOut.close();
+	}
+	else
+		cout << "ERROR: could not write OFF file " << offFilenameStr << endl;
+}
+
+
  // reconstruct triangulation from point set
- 
 //void connect3D(list<Triangle *> &boundaryTriangles)
 void BoundaryComplex::connect3D()
 {
 	dt = construct3DDelaunayTriangulation();
-	cout << "Delaunay Triangulation done" << endl;
 
 	createAggregateDataStructure();
-	cout << "Aggregate Datastructure created" << endl;
 
 	criterionType = 1;	// criterion: longest edge in triangle
 	createBoundaryComplex(dt);
@@ -845,7 +902,36 @@ void BoundaryComplex::connect3D()
 		if (currTri->exists())
 			boundaryTriangles.push_back(currTri);
 	}*/
+
+	writeOFFFile();
 }
+
+
+BoundaryComplex::BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in){
+	vertexCount = cloud_in->size();	// TODO: why? (for knot.pts)
+	v = new _Vertex[vertexCount];
+	_Vertex vertex;
+	int i = 0;
+	for(pcl::PointCloud<pcl::PointXYZRGB>::const_iterator it = cloud_in->points.begin(); it != cloud_in->points.end(); ++it){
+		Vector3D vec;
+		vec[0] = it->x;
+		vec[1] = it->y;
+		vec[2] = it->z;
+
+		vertex.vec = vec;
+		v[i] = vertex;
+		i++;
+	}
+
+	connect3D();
+}
+
+
+//TODO
+void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold){
+
+}
+
 
 
 BoundaryComplex::~BoundaryComplex(){

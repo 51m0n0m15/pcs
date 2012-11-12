@@ -15,12 +15,26 @@
 #include <boost/thread/thread.hpp>
 
 #include "BoundaryComplex.h"
+#include "config.h"
 
 using namespace pcl;
 
-void
- visualize (PointCloud<PointXYZRGB>::Ptr cloud)
- {
+//this will be our original point cloud data set
+pcl::PointCloud<PointXYZRGB>::Ptr cloud_input(new PointCloud<PointXYZRGB>());
+
+//these are the different segmented point clouds
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_knn (new pcl::PointCloud<pcl::PointXYZRGB>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_bc (new pcl::PointCloud<pcl::PointXYZRGB>);
+
+//for cluster-labelling
+vector<int> *cl_plane_knn;
+vector<int> *cl_plane_bc;
+
+//construct the boundary complex for filtered input data
+BoundaryComplex *bc;
+
+
+void visualize (PointCloud<PointXYZRGB>::Ptr cloud) {
 	visualization::CloudViewer viewer ("Simple Cloud Viewer");
 	viewer.showCloud (cloud);
 	while (!viewer.wasStopped ()){}
@@ -32,7 +46,7 @@ PointCloud<PointXYZRGB>::Ptr filter(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	PointXYZRGB min;
 	PointXYZRGB max;
 	getMinMax3D(*cloud_in, min, max);
-	float ls = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z))/200; //edit divisor for different finer/rougher downsampling
+	float ls = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z))/config::filterLeafSize;
 	
 	// Create the filtering object: downsample the dataset using a leaf size of 1cm
 	VoxelGrid<PointXYZRGB> vg;
@@ -45,17 +59,13 @@ PointCloud<PointXYZRGB>::Ptr filter(PointCloud<PointXYZRGB>::Ptr cloud_in){
 }
 
 
-//TODO plane-segmenten farben geben
 /*
-adjustierbar:
-- distance threshold für plane segmentation (momentan: groesste ausdehnung(x,y oder z)/100)
 - maximale iterationen für plane segmentation (momentan: 100)
 - abbruch der plane-segmentation-schleife (momentan: letzte ebene kleiner als cloud_input->size()/10)
-- cluster tolerance f. euclidean clustering (momentan: =distance threshold fuer plane segmentation)
-- minimale cluster size (momentan: anzahl input-punkte/500)
-- maximale cluster size (momentan: unbegrenzt)
 */
 PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
+
+	int clusterNo=1;
 
 	PointCloud<PointXYZRGB>::Ptr cloud_filtered (cloud_in), cloud_f(new PointCloud<PointXYZRGB>);
 	PointCloud<PointXYZRGB>::Ptr cloud_segmented (new PointCloud<PointXYZRGB>);
@@ -64,7 +74,7 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	PointXYZRGB min;
 	PointXYZRGB max;
 	getMinMax3D(*cloud_in, min, max);
-	float dt = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z))/100; //edit divisor for different threshold
+	float maxExp = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z));
 	
 	// Create the segmentation object for the planar model and set all the parameters
 	SACSegmentation<PointXYZRGB> seg;
@@ -75,7 +85,7 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	seg.setModelType (SACMODEL_PLANE);
 	seg.setMethodType (SAC_RANSAC);
 	seg.setMaxIterations (100);
-	seg.setDistanceThreshold (dt);
+	seg.setDistanceThreshold (maxExp/config::planeDistThreshold);
 
 	//int i=0, nr_points = (int) cloud_filtered->points.size ();
 	//while (cloud_filtered->points.size () > 0.3 * nr_points)
@@ -109,15 +119,26 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 		int r = std::rand()%256;
 		int g = std::rand()%256;
 		int b = std::rand()%256;
-		for(PointCloud<PointXYZRGB>::const_iterator it = cloud_plane->points.begin(); it != cloud_plane->points.end(); ++it){
+		int offset=0;
+		int pos=0;
+		vector<int> *indices = extract.getIndices().get();
+		for(int i=0; i<cloud_plane->size(); i++){
 			PointXYZRGB point(r,g,b);
-			point.x=it->x;
-			point.y=it->y;
-			point.z=it->z;
+			point.x=cloud_plane->points[i].x;
+			point.y=cloud_plane->points[i].y;
+			point.z=cloud_plane->points[i].z;
 			cloud_segmented->push_back(point);
+			
+			//update the cluster-vector..
+			while(pos <= indices->at(i)+offset){
+				if(cl_plane_knn->at(pos)!=0) offset++;
+				pos++;
+			}
+			cl_plane_knn->at(indices->at(i)+offset)=clusterNo;
 		}
-
-		cout << "PointCloud representing the planar component: " << cloud_plane->points.size () << " data points." << endl;
+		
+		cout << "Cluster " << clusterNo << ", planar component: " << cloud_plane->points.size () << " data points." << endl;
+		clusterNo++;
 
 		// Remove the planar inliers, extract the rest
 		extract.setNegative (true);
@@ -130,14 +151,13 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	tree->setInputCloud (cloud_filtered);	//hier absturz bei manchen clouds
 	vector<PointIndices> cluster_indices;
 	EuclideanClusterExtraction<PointXYZRGB> ec;
-	ec.setClusterTolerance (dt); // 2cm
-	ec.setMinClusterSize (cloud_in->size()/500); //irgendwas
+	ec.setClusterTolerance (maxExp/config::clusterDistThreshold);
+	ec.setMinClusterSize (cloud_in->size()/config::minClusterSize);
 	//ec.setMaxClusterSize (cloud_in->size()/2);
 	ec.setSearchMethod (tree);
 	ec.setInputCloud (cloud_filtered);
 	ec.extract (cluster_indices);
   
-	int j = 0;
 	for (vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
 	{
     
@@ -160,12 +180,31 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 		cloud_segmented->height = 1;
 		cloud_segmented->is_dense = true;
 
-		cout << "Cluster "<<j<<": " << pointcounter << " data points." << endl;
+		cout << "Cluster "<<clusterNo<<": " << pointcounter << " data points." << endl;
     
-		j++;
+		clusterNo++;
 	} 
 
 	cout << "segmentation completed" << endl;
+
+	//debug
+	for(int i=0; i<cl_plane_knn->size(); i++){
+		if(cl_plane_knn->at(i)==1){
+			cloud_input->points.at(i).r=255;
+			cloud_input->points.at(i).g=0;
+			cloud_input->points.at(i).b=0;
+		}
+		if(cl_plane_knn->at(i)==2){
+			cloud_input->points.at(i).r=0;
+			cloud_input->points.at(i).g=255;
+			cloud_input->points.at(i).b=0;
+		}
+		if(cl_plane_knn->at(i)==3){
+			cloud_input->points.at(i).r=0;
+			cloud_input->points.at(i).g=0;
+			cloud_input->points.at(i).b=255;
+		}
+	}
 
 	return cloud_segmented;
 }
@@ -175,19 +214,17 @@ PointCloud<PointXYZRGB>::Ptr planeKnn(PointCloud<PointXYZRGB>::Ptr cloud_in){
 
 PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 
-	PointCloud<PointXYZRGB>::Ptr cloud_filtered (cloud_in); 
-	PointCloud<PointXYZRGB>::Ptr cloud_f(new PointCloud<PointXYZRGB>);
+	int clusterNo = 1;
+
+	PointCloud<PointXYZRGB>::Ptr cloud_filtered (cloud_in), cloud_f(new PointCloud<PointXYZRGB>);
 	PointCloud<PointXYZRGB>::Ptr cloud_segmented (new PointCloud<PointXYZRGB>);
 
 	// calculate distance threshold
 	PointXYZRGB min;
 	PointXYZRGB max;
 	getMinMax3D(*cloud_in, min, max);
-	float dt = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z))/100; //edit divisor for different threshold
+	float maxExp = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z));
 	
-
-
-
 	// Create the segmentation object for the planar model and set all the parameters
 	SACSegmentation<PointXYZRGB> seg;
 	PointIndices::Ptr inliers (new PointIndices);
@@ -197,7 +234,7 @@ PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	seg.setModelType (SACMODEL_PLANE);
 	seg.setMethodType (SAC_RANSAC);
 	seg.setMaxIterations (100);
-	seg.setDistanceThreshold (dt);
+	seg.setDistanceThreshold (maxExp/config::planeDistThreshold);
 
 
 	while (true)
@@ -222,21 +259,33 @@ PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 		
 		//!!!!!!BREAK CONDITION!!!!!!!
 		if(cloud_plane->size() < cloud_in->points.size()/10) break;
+		//size_last_plane = cloud_plane->size();
 		
 		
 		//color points of planar component and add them to segmentation solution
 		int r = std::rand()%256;
 		int g = std::rand()%256;
 		int b = std::rand()%256;
-		for(PointCloud<PointXYZRGB>::const_iterator it = cloud_plane->points.begin(); it != cloud_plane->points.end(); ++it){
+		int offset=0;
+		int pos=0;
+		vector<int> *indices = extract.getIndices().get();
+		for(int i=0; i<cloud_plane->size(); i++){
 			PointXYZRGB point(r,g,b);
-			point.x=it->x;
-			point.y=it->y;
-			point.z=it->z;
+			point.x=cloud_plane->points[i].x;
+			point.y=cloud_plane->points[i].y;
+			point.z=cloud_plane->points[i].z;
 			cloud_segmented->push_back(point);
+			
+			//update the cluster-vector..
+			while(pos <= indices->at(i)+offset){
+				if(cl_plane_bc->at(pos)!=0) offset++;
+				pos++;
+			}
+			cl_plane_bc->at(indices->at(i)+offset)=clusterNo;
 		}
-
-		cout << "PointCloud representing the planar component: " << cloud_plane->points.size () << " data points." << endl;
+		
+		cout << "Cluster " << clusterNo << ", planar component: " << cloud_plane->points.size () << " data points." << endl;
+		clusterNo++;
 
 		// Remove the planar inliers, extract the rest
 		extract.setNegative (true);
@@ -244,20 +293,19 @@ PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 		cloud_filtered = cloud_f;
 	}
 
-	/*
 	// Creating the KdTree object for the search method of the extraction
 	search::KdTree<PointXYZRGB>::Ptr tree (new search::KdTree<pcl::PointXYZRGB>);
 	tree->setInputCloud (cloud_filtered);	//hier absturz bei manchen clouds
 	vector<PointIndices> cluster_indices;
 	EuclideanClusterExtraction<PointXYZRGB> ec;
-	ec.setClusterTolerance (dt); // 2cm
-	ec.setMinClusterSize (cloud_in->size()/500); //irgendwas
+	ec.setClusterTolerance (maxExp/config::clusterDistThreshold);
+	ec.setMinClusterSize (cloud_in->size()/config::minClusterSize);
 	//ec.setMaxClusterSize (cloud_in->size()/2);
 	ec.setSearchMethod (tree);
 	ec.setInputCloud (cloud_filtered);
 	ec.extract (cluster_indices);
   
-	int j = 0;
+
 	for (vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
 	{
     
@@ -274,17 +322,18 @@ PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 			point.z=cloud_filtered->points[*pit].z;
 			cloud_segmented->points.push_back (point); 
 			pointcounter++;
+
+			//TODO: update cluster vector
 		}
       
 		cloud_segmented->width = cloud_segmented->points.size ();
 		cloud_segmented->height = 1;
 		cloud_segmented->is_dense = true;
 
-		cout << "Cluster "<<j<<": " << pointcounter << " data points." << endl;
+		cout << "Cluster "<<clusterNo<<": " << pointcounter << " data points." << endl;
     
-		j++;
+		clusterNo++;
 	} 
-	*/
 
 	cout << "segmentation completed" << endl;
 
@@ -297,6 +346,8 @@ PointCloud<PointXYZRGB>::Ptr planeBc(PointCloud<PointXYZRGB>::Ptr cloud_in){
 int main (int argc, char** argv)
 {
   
+	config::readConfig();
+	
 	if(argc<2){
 		cout << "usage:" << endl << "	pcs [filename]" << endl << "	(can only read .pcd and .ply)";
 		return(0);
@@ -306,8 +357,6 @@ int main (int argc, char** argv)
 
 	//true if input file is .pcd, false if it's .ply
 	bool pcd;
-	//this will be our original point cloud data set
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_input(new PointCloud<PointXYZRGB>());
 	
 	//load file
 	if(regex_match(filename, regex("(.*)(\.pcd)"))){
@@ -328,16 +377,13 @@ int main (int argc, char** argv)
 	//downsampling
 	cloud_input=filter(cloud_input);
 
-	
-	//these are the different segmented point clouds
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_knn (new pcl::PointCloud<pcl::PointXYZRGB>);
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_bc (new pcl::PointCloud<pcl::PointXYZRGB>);
+	//for cluster-labelling
+	cl_plane_knn = new vector<int>(cloud_input->size(), 0);
+	cl_plane_bc = new vector<int>(cloud_input->size(), 0);
 
 	//construct the boundary complex for filtered input data
-	BoundaryComplex *bc = new BoundaryComplex(cloud_input);
-	bc->connect3D();
-	cout << "Boundary Complex constructed" << endl;
-	
+	bc = new BoundaryComplex(cloud_input);
+
 	//handle user commands
 	string in;
 	while(true){

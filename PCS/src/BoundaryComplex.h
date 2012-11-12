@@ -10,6 +10,8 @@ class BoundaryComplex{
 public:
 	BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in);
 	~BoundaryComplex();
+	void doClustering(vector<int> *clustering, float distThreshold);
+private:
 	void connect3D();
 };
 #endif
