@@ -33,6 +33,8 @@ vector<int> *cl_plane_bc;
 //just good to know
 bool plane_knn_done = false;
 bool plane_bc_done = false;
+int plane_knn_cluster_count = 0;
+int plane_bc_cluster_count = 0;
 
 //construct the boundary complex for filtered input data
 BoundaryComplex *bc;
@@ -184,10 +186,12 @@ void planeKnn(){
 		cl_plane_knn->at(i+offset)=cl_euclid_part[i];
 	}
 
+	plane_knn_cluster_count = clusterNo-1;
 
 	//color the plane_knn-cloud
-	vector<vector<int>> colors(clusterNo-1);
-	for(int i=0; i<clusterNo-1; i++){
+	vector<vector<int>> colors(plane_knn_cluster_count);
+	srand(time(NULL));
+	for(int i=0; i<plane_knn_cluster_count; i++){
 		vector<int> c(3);
 		c[0]=std::rand()%256;
 		c[1]=std::rand()%256;
@@ -293,14 +297,15 @@ void planeBc(){
 	//boundary-complex-clustering
 	bc->doClustering(cl_plane_bc, maxExp/config::clusterDistThreshold, cloud_input->size()/config::minClusterSize, clusterNo);
 
-
+	//clusterNo got lost somewhere in the boundary complex, so we have to count the clusters by ourselves..
+	for(vector<int>::iterator iter=cl_plane_bc->begin(); iter!=cl_plane_bc->end(); iter++)
+		if(*iter > plane_bc_cluster_count)
+			plane_bc_cluster_count=*iter;
 
 	//color the plane_bc-cloud
-	for(vector<int>::iterator iter=cl_plane_bc->begin(); iter!=cl_plane_bc->end(); iter++)
-		if(*iter > clusterNo)
-			clusterNo=*iter;
-	vector<vector<int>> colors(clusterNo);
-	for(int i=0; i<clusterNo; i++){
+	vector<vector<int>> colors(plane_bc_cluster_count);
+	srand(time(NULL));
+	for(int i=0; i<plane_bc_cluster_count; i++){
 		vector<int> c(3);
 		c[0]=std::rand()%256;
 		c[1]=std::rand()%256;
@@ -325,6 +330,62 @@ void planeBc(){
 }
 
 
+float compare(vector<int> *a, vector<int> *b, int cc_a, int cc_b){
+	
+	int sum_a_and_b=0;
+	int sum_a=0;
+	int sum_b=0;	//gets too big for integer and float... problem: if cluster in b covers more than 1 cluster in a.
+
+	vector<vector<int>> _a(cc_a+1);	//a+1 because clusters start at 1, label 0 means "doesn't belong to cluster"
+	vector<vector<int>> _b(cc_b+1);
+	for(int i=0; i<a->size(); i++){
+		_a[a->at(i)].push_back(i);
+		_b[b->at(i)].push_back(i);
+	}
+
+	int j=1;
+	//iteratr over all lusters in a
+	for(vector<vector<int>>::iterator iter=_a.begin(); iter!=_a.end(); ++iter){
+		
+		//find cluster in b which has most elements in current cluster of a
+		vector<int> hist(iter->size(), 0);
+		for(vector<int>::iterator it=iter->begin(); it!=iter->end(); it++){
+			hist[b->at(*it)]++;
+		}
+		int cluster_b;
+		int a_and_b=0;
+		for(int i=1; i<hist.size(); i++){
+			if(hist[i]>a_and_b){
+				a_and_b=hist[i];
+				cluster_b=i;
+			}
+		}
+
+		float precision = (float)a_and_b / (float)(_b[cluster_b].size());
+		float recall = (float)a_and_b / (float)(iter->size());
+		
+		float f1measure;
+		if(precision==0 && recall==0)	//divide by 0
+			f1measure = 0;
+		else
+			f1measure = 2*(precision*recall/(precision+recall));
+		cout << "Cluster " << j << ": precision " << precision << " recall " << recall << " f1-measure " << f1measure << endl;
+		j++;
+
+		sum_a_and_b+=a_and_b;
+		sum_a+=(float)(iter->size());
+		sum_b+=(float)(_b[cluster_b].size());
+	}
+
+	float total_precision = (float)sum_a_and_b/(float)sum_b;
+	float total_recall = (float)sum_a_and_b/(float)sum_a;
+	cout << sum_b << endl;
+	cout << total_precision	<< " " << total_recall << endl;
+	if(total_precision+total_recall==0)
+		return 0;
+	else
+		return 2*total_precision*total_recall/(total_precision+total_recall);
+}
 
 
 int main (int argc, char** argv)
@@ -437,7 +498,11 @@ int main (int argc, char** argv)
 		}
 
 
-
+		if(string(in)=="compare"){
+			float f1 = compare(cl_plane_knn, cl_plane_bc, plane_knn_cluster_count, plane_bc_cluster_count);
+			cout << "F1-Measure of compared solutions: " << f1 << endl;
+			continue;
+		}
 
 		if(string(in)=="exit"){
 			break;
@@ -453,6 +518,8 @@ int main (int argc, char** argv)
 			"	planebc" << endl <<
 			"	showplanebc" << endl <<
 			"	saveplanebc" << endl <<
+
+			"	compare" << endl <<
 
 			"	exit" << endl;
 	}
