@@ -5,6 +5,7 @@
 #include <pcl/point_types.h>
 #include <set>
 #include "config.h"
+#include "Solution.h"
 
 using namespace std;
 
@@ -12,7 +13,7 @@ class BoundaryComplex{
 public:
 	BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in);
 	~BoundaryComplex();
-	void doClustering(vector<int> *clustering, float distThreshold, int minClusterSize, int clusterNo);
+	void doClustering(Solution *s);
 	set<int> getNeighbors(int index);
 
 private:

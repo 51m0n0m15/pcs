@@ -15,28 +15,19 @@
 #include <boost/thread/thread.hpp>
 
 #include "BoundaryComplex.h"
+#include "Solution.h"
 #include "config.h"
 
 using namespace pcl;
 
-//this will be our original point cloud data set
-pcl::PointCloud<PointXYZRGB>::Ptr cloud_input(new PointCloud<PointXYZRGB>());
 
-//these are the different segmented point clouds
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_knn;//(new pcl::PointCloud<pcl::PointXYZRGB>);
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_plane_bc;//(new pcl::PointCloud<pcl::PointXYZRGB>);
+//just for convenience
+int pointCount;
 
-//for cluster-labelling
-vector<int> *cl_plane_knn;
-vector<int> *cl_plane_bc;
+Solution *input;
+Solution *plane_knn;
+Solution *plane_bc;
 
-//just good to know
-bool plane_knn_done = false;
-bool plane_bc_done = false;
-int plane_knn_cluster_count = 0;
-int plane_bc_cluster_count = 0;
-
-//construct the boundary complex for filtered input data
 BoundaryComplex *bc;
 
 
@@ -66,25 +57,20 @@ PointCloud<PointXYZRGB>::Ptr filter(PointCloud<PointXYZRGB>::Ptr cloud_in){
 
 
 /*
+noch variierbar:
 - maximale iterationen für plane segmentation (momentan: 100)
 - abbruch der plane-segmentation-schleife (momentan: letzte ebene kleiner als cloud_input->size()/10)
 */
 void planeKnn(){
 
-	if(plane_knn_done){
+	if(plane_knn->clustering_done){
 		cout << "You already did that." << endl;
 		return;
 	}
 
 	int clusterNo=1;
 
-	PointCloud<PointXYZRGB>::Ptr cloud_filtered (cloud_input), cloud_f(new PointCloud<PointXYZRGB>);
-
-	// calculate distance threshold
-	PointXYZRGB min;
-	PointXYZRGB max;
-	getMinMax3D(*cloud_input, min, max);
-	float maxExp = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z));
+	PointCloud<PointXYZRGB>::Ptr cloud_filtered (plane_knn->cloud), cloud_f(new PointCloud<PointXYZRGB>);
 
 	// Create the segmentation object for the planar model and set all the parameters
 	SACSegmentation<PointXYZRGB> seg;
@@ -95,7 +81,7 @@ void planeKnn(){
 	seg.setModelType (SACMODEL_PLANE);
 	seg.setMethodType (SAC_RANSAC);
 	seg.setMaxIterations (100);
-	seg.setDistanceThreshold (maxExp/config::planeDistThreshold);
+	seg.setDistanceThreshold (plane_knn->max_exp/config::planeDistThreshold);
 
 	//int i=0, nr_points = (int) cloud_filtered->points.size ();
 	//while (cloud_filtered->points.size () > 0.3 * nr_points)
@@ -121,7 +107,7 @@ void planeKnn(){
 		extract.filter (*cloud_plane);
 
 		//!!!!!!BREAK CONDITION!!!!!!!
-		if(cloud_plane->size() < cloud_input->points.size()/10) break;
+		if(cloud_plane->size() < pointCount/10) break;
 		//size_last_plane = cloud_plane->size();
 
 
@@ -132,10 +118,10 @@ void planeKnn(){
 		for(int i=0; i<cloud_plane->size(); i++){
 			//update the cluster-vector..
 			while(pos <= indices->at(i)+offset){
-				if(cl_plane_knn->at(pos)!=0) offset++;
+				if(plane_knn->clustering->at(pos)!=0) offset++;
 				pos++;
 			}
-			cl_plane_knn->at(indices->at(i)+offset)=clusterNo;
+			plane_knn->clustering->at(indices->at(i)+offset)=clusterNo;
 		}
 
 		cout << "Cluster " << clusterNo << ", planar component: " << cloud_plane->points.size () << " data points." << endl;
@@ -152,8 +138,8 @@ void planeKnn(){
 	tree->setInputCloud (cloud_filtered);	//hier absturz bei manchen clouds
 	vector<PointIndices> cluster_indices;
 	EuclideanClusterExtraction<PointXYZRGB> ec;
-	ec.setClusterTolerance (maxExp/config::clusterDistThreshold);
-	ec.setMinClusterSize (cloud_input->size()/config::minClusterSize);
+	ec.setClusterTolerance (plane_knn->max_exp/config::clusterDistThreshold);
+	ec.setMinClusterSize (pointCount/config::minClusterSize);
 	//ec.setMaxClusterSize (cloud_in->size()/2);
 	ec.setSearchMethod (tree);
 	ec.setInputCloud (cloud_filtered);
@@ -180,39 +166,18 @@ void planeKnn(){
 	int pos=0;
 	for(int i=0; i<cl_euclid_part.size(); i++){
 		while(pos <= i+offset){
-			if(cl_plane_knn->at(pos)!=0) offset++;
+			if(plane_knn->clustering->at(pos)!=0) offset++;
 			pos++;
 		}
-		cl_plane_knn->at(i+offset)=cl_euclid_part[i];
+		plane_knn->clustering->at(i+offset)=cl_euclid_part[i];
 	}
 
-	plane_knn_cluster_count = clusterNo-1;
+	plane_knn->cluster_count = clusterNo-1;
+	plane_knn->clustering_done=true;
 
-	//color the plane_knn-cloud
-	vector<vector<int>> colors(plane_knn_cluster_count);
-	srand(time(NULL));
-	for(int i=0; i<plane_knn_cluster_count; i++){
-		vector<int> c(3);
-		c[0]=std::rand()%256;
-		c[1]=std::rand()%256;
-		c[2]=std::rand()%256;
-		colors[i]=c;
-	}
+	plane_knn->color_cloud_from_clustering();
 
-	for(int i=0; i<cl_plane_knn->size(); i++){
-		if(cl_plane_knn->at(i) > 0){
-			cloud_plane_knn->points[i].r = colors[cl_plane_knn->at(i)-1][0];
-			cloud_plane_knn->points[i].g = colors[cl_plane_knn->at(i)-1][1];
-			cloud_plane_knn->points[i].b = colors[cl_plane_knn->at(i)-1][2];
-		} else {
-			cloud_plane_knn->points[i].r = 0;
-			cloud_plane_knn->points[i].g = 0;
-			cloud_plane_knn->points[i].b = 0;
-		}
-	}
-
-	plane_knn_done=true;
-	cout << "segmentation done" << endl;
+	cout << "Segmentation done." << endl;
 }
 
 
@@ -220,20 +185,15 @@ void planeKnn(){
 
 void planeBc(){
 
-	if(plane_bc_done){
+	if(plane_bc->clustering_done){
 		cout << "You already did that." << endl;
 		return;
 	}
 
 	int clusterNo = 1;
 
-	PointCloud<PointXYZRGB>::Ptr cloud_filtered (cloud_input), cloud_f(new PointCloud<PointXYZRGB>);
+	PointCloud<PointXYZRGB>::Ptr cloud_filtered (plane_bc->cloud), cloud_f(new PointCloud<PointXYZRGB>);
 
-	// calculate distance threshold
-	PointXYZRGB min;
-	PointXYZRGB max;
-	getMinMax3D(*cloud_input, min, max);
-	float maxExp = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z));
 
 	// Create the segmentation object for the planar model and set all the parameters
 	SACSegmentation<PointXYZRGB> seg;
@@ -244,7 +204,7 @@ void planeBc(){
 	seg.setModelType (SACMODEL_PLANE);
 	seg.setMethodType (SAC_RANSAC);
 	seg.setMaxIterations (100);
-	seg.setDistanceThreshold (maxExp/config::planeDistThreshold);
+	seg.setDistanceThreshold (plane_bc->max_exp/config::planeDistThreshold);
 
 
 	while (true)
@@ -268,7 +228,7 @@ void planeBc(){
 		extract.filter (*cloud_plane);
 
 		//!!!!!!BREAK CONDITION!!!!!!!
-		if(cloud_plane->size() < cloud_input->points.size()/10) break;
+		if(cloud_plane->size() < pointCount/10) break;
 		//size_last_plane = cloud_plane->size();
 
 
@@ -279,10 +239,10 @@ void planeBc(){
 		for(int i=0; i<cloud_plane->size(); i++){
 			//update the cluster-vector..
 			while(pos <= indices->at(i)+offset){
-				if(cl_plane_bc->at(pos)!=0) offset++;
+				if(plane_bc->clustering->at(pos)!=0) offset++;
 				pos++;
 			}
-			cl_plane_bc->at(indices->at(i)+offset)=clusterNo;
+			plane_bc->clustering->at(indices->at(i)+offset)=clusterNo;
 		}
 
 		cout << "Cluster " << clusterNo << ", planar component: " << cloud_plane->points.size () << " data points." << endl;
@@ -295,64 +255,39 @@ void planeBc(){
 	}
 
 	//boundary-complex-clustering
-	bc->doClustering(cl_plane_bc, maxExp/config::clusterDistThreshold, cloud_input->size()/config::minClusterSize, clusterNo);
+	plane_bc->cluster_count=clusterNo;
+	bc->doClustering(plane_bc);
 
-	//clusterNo got lost somewhere in the boundary complex, so we have to count the clusters by ourselves..
-	for(vector<int>::iterator iter=cl_plane_bc->begin(); iter!=cl_plane_bc->end(); iter++)
-		if(*iter > plane_bc_cluster_count)
-			plane_bc_cluster_count=*iter;
+	plane_bc->clustering_done=true;
+	
+	plane_bc->color_cloud_from_clustering();
 
-	//color the plane_bc-cloud
-	vector<vector<int>> colors(plane_bc_cluster_count);
-	srand(time(NULL));
-	for(int i=0; i<plane_bc_cluster_count; i++){
-		vector<int> c(3);
-		c[0]=std::rand()%256;
-		c[1]=std::rand()%256;
-		c[2]=std::rand()%256;
-		colors[i]=c;
-	}
-
-	for(int i=0; i<cl_plane_bc->size(); i++){
-		if(cl_plane_bc->at(i) > 0){
-			cloud_plane_bc->points[i].r = colors[cl_plane_bc->at(i)-1][0];
-			cloud_plane_bc->points[i].g = colors[cl_plane_bc->at(i)-1][1];
-			cloud_plane_bc->points[i].b = colors[cl_plane_bc->at(i)-1][2];
-		} else {
-			cloud_plane_bc->points[i].r = 0;
-			cloud_plane_bc->points[i].g = 0;
-			cloud_plane_bc->points[i].b = 0;
-		}
-	}
-
-	plane_bc_done=true;
-	cout << "segmentation done" << endl;
+	
+	cout << "Segmentation done." << endl;
 }
 
 
-float compare(vector<int> *a, vector<int> *b, int cc_a, int cc_b){
-	
-	int sum_a_and_b=0;
-	int sum_a=0;
-	int sum_b=0;	//gets too big for integer and float... problem: if cluster in b covers more than 1 cluster in a.
+double compare(Solution *a, Solution *b){
 
-	vector<vector<int>> _a(cc_a+1);	//a+1 because clusters start at 1, label 0 means "doesn't belong to cluster"
-	vector<vector<int>> _b(cc_b+1);
-	for(int i=0; i<a->size(); i++){
-		_a[a->at(i)].push_back(i);
-		_b[b->at(i)].push_back(i);
+	double total_f1measure=0;
+
+	vector<vector<int>> _a(a->cluster_count+1);	//a+1 because clusters start at 1, label 0 means "doesn't belong to cluster"
+	vector<vector<int>> _b(b->cluster_count+1);
+	for(int i=0; i<pointCount; i++){
+		_a[a->clustering->at(i)].push_back(i);
+		_b[b->clustering->at(i)].push_back(i);
 	}
 
 	int j=1;
-	//iteratr over all lusters in a
-	for(vector<vector<int>>::iterator iter=_a.begin(); iter!=_a.end(); ++iter){
+	//iteratr over all clusters in a
+	for(vector<vector<int>>::iterator iter=++_a.begin(); iter!=_a.end(); iter++){
 		
 		//find cluster in b which has most elements in current cluster of a
 		vector<int> hist(iter->size(), 0);
 		for(vector<int>::iterator it=iter->begin(); it!=iter->end(); it++){
-			hist[b->at(*it)]++;
+			hist[b->clustering->at(*it)]++;
 		}
-		int cluster_b;
+		int cluster_b=0;
 		int a_and_b=0;
 		for(int i=1; i<hist.size(); i++){
 			if(hist[i]>a_and_b){
@@ -360,78 +295,69 @@ float compare(vector<int> *a, vector<int> *b, int cc_a, int cc_b){
 				cluster_b=i;
 			}
 		}
-
-		float precision = (float)a_and_b / (float)(_b[cluster_b].size());
-		float recall = (float)a_and_b / (float)(iter->size());
+		double precision = (double)a_and_b / (double)(_b[cluster_b].size());
+		double recall = (double)a_and_b / (double)(iter->size());
 		
-		float f1measure;
-		if(precision==0 && recall==0)	//divide by 0
+		double f1measure;
+		if(precision+recall==0)	//divide by 0
 			f1measure = 0;
 		else
 			f1measure = 2*(precision*recall/(precision+recall));
-		cout << "Cluster " << j << ": precision " << precision << " recall " << recall << " f1-measure " << f1measure << endl;
+
+		cout << "Cluster "  << j << ":	prec " << precision << "		rec " 
+			<< recall << "	F1 " << f1measure << endl;
 		j++;
 
-		sum_a_and_b+=a_and_b;
-		sum_a+=(float)(iter->size());
-		sum_b+=(float)(_b[cluster_b].size());
+		total_f1measure+= f1measure*((double)(iter->size())/
+			((double)(a->clustering->size()-_a[0].size())));	//weighted
 	}
 
-	float total_precision = (float)sum_a_and_b/(float)sum_b;
-	float total_recall = (float)sum_a_and_b/(float)sum_a;
-	cout << sum_b << endl;
-	cout << total_precision	<< " " << total_recall << endl;
-	if(total_precision+total_recall==0)
-		return 0;
-	else
-		return 2*total_precision*total_recall/(total_precision+total_recall);
+	return total_f1measure;
 }
 
 
 int main (int argc, char** argv)
 {
-
 	config::readConfig();
+	
+	PointCloud<PointXYZRGB>::Ptr input_cloud(new PointCloud<PointXYZRGB>());
 
 	if(argc<2){
 		cout << "usage:" << endl << "	pcs [filename]" << endl << "	(can only read .pcd and .ply)";
 		return(0);
 	}
-
 	string filename = argv[1];
-
-	//true if input file is .pcd, false if it's .ply
-	bool pcd;
-
+	
+	bool pcd;	//true if input file is .pcd, false if it's .ply
 	//load file
 	if(regex_match(filename, regex("(.*)(\.pcd)"))){
 		PCDReader reader;
-		reader.read(filename, *cloud_input);
+		reader.read(filename, *(input_cloud));
 		pcd = true;
-		cout << "successfully loaded " << filename << ": " << cloud_input->size() << " points" << endl;
+		cout << "successfully loaded " << filename << ": " << input_cloud->size() << " points" << endl;
 	} else if(regex_match(filename, regex("(.*)(\.ply)"))){
 		PLYReader reader;
-		reader.read(filename, *cloud_input);
+		reader.read(filename, *(input_cloud));
 		pcd = false;
-		cout << "successfully loaded " << filename << ": " << cloud_input->size() << " points" << endl;
+		cout << "successfully loaded " << filename << ": " << input_cloud->size() << " points" << endl;
 	} else {
 		cout << "usage:" << endl << "	pcs [filename]" << endl << "	(can only read .pcd and .ply)";
 		return(0);
 	}
 
 	//downsampling
-	cloud_input=filter(cloud_input);
+	input_cloud=filter(input_cloud);
 
-	//copy for different cluster solutions (and color all points black)
-	cloud_plane_knn = *(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>(*cloud_input)));
-	cloud_plane_bc = *(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>(*cloud_input)));
+	pointCount = input_cloud->points.size();
 
-	//for cluster-labelling
-	cl_plane_knn = new vector<int>(cloud_input->size(), 0);
-	cl_plane_bc = new vector<int>(cloud_input->size(), 0);
+	//initialize different solutions
+	input = new Solution(input_cloud);
+	plane_knn = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))));
+	plane_bc = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))));
+
 
 	//construct the boundary complex for filtered input data
-	bc = new BoundaryComplex(cloud_input);
+	bc = new BoundaryComplex(input->cloud);
 
 	//handle user commands
 	string in;
@@ -439,7 +365,7 @@ int main (int argc, char** argv)
 		cin >> in;
 
 		if(string(in)=="showinput"){
-			boost::thread(visualize, cloud_input);
+			boost::thread(visualize, input->cloud);
 			continue;
 		}
 
@@ -451,7 +377,7 @@ int main (int argc, char** argv)
 			continue;
 		}
 		if(string(in)=="showplaneknn"){
-			boost::thread(visualize, cloud_plane_knn);
+			boost::thread(visualize, plane_knn->cloud);
 			continue;
 		}
 		if(string(in)=="saveplaneknn"){
@@ -459,12 +385,12 @@ int main (int argc, char** argv)
 				PCDWriter writer;
 				stringstream ss;
 				ss << "planeKnn_" << filename;
-				writer.write<PointXYZRGB> (ss.str (), *cloud_plane_knn, false);
+				writer.write<PointXYZRGB> (ss.str (), *(plane_knn->cloud), false);
 			} else{
 				PLYWriter writer;
 				stringstream ss;
 				ss << "planeKnn_" << filename;
-				writer.write<PointXYZRGB> (ss.str (), *cloud_plane_knn, false);
+				writer.write<PointXYZRGB> (ss.str (), *(plane_knn->cloud), false);
 			}
 			cout << "segmented cloud has been saved to planeKnn_" << filename << endl;
 			continue;
@@ -478,7 +404,7 @@ int main (int argc, char** argv)
 			continue;
 		}
 		if(string(in)=="showplanebc"){
-			boost::thread(visualize, cloud_plane_bc);
+			boost::thread(visualize, plane_bc->cloud);
 			continue;
 		}
 		if(string(in)=="saveplanebc"){
@@ -486,12 +412,12 @@ int main (int argc, char** argv)
 				PCDWriter writer;
 				stringstream ss;
 				ss << "planeBc_" << filename;
-				writer.write<PointXYZRGB> (ss.str (), *cloud_plane_bc, false);
+				writer.write<PointXYZRGB> (ss.str (), *(plane_bc->cloud), false);
 			} else{
 				PLYWriter writer;
 				stringstream ss;
 				ss << "planeBc_" << filename;
-				writer.write<PointXYZRGB> (ss.str (), *cloud_plane_bc, false);
+				writer.write<PointXYZRGB> (ss.str (), *(plane_bc->cloud), false);
 			}
 			cout << "segmented cloud has been saved to planeBc_" << filename << endl;
 			continue;
@@ -499,7 +425,11 @@ int main (int argc, char** argv)
 
 
 		if(string(in)=="compare"){
-			float f1 = compare(cl_plane_knn, cl_plane_bc, plane_knn_cluster_count, plane_bc_cluster_count);
+			if(!plane_knn->clustering_done)
+				planeKnn();
+			if(!plane_bc->clustering_done)
+				planeBc();
+			double f1 = compare(plane_knn, plane_bc);
 			cout << "F1-Measure of compared solutions: " << f1 << endl;
 			continue;
 		}

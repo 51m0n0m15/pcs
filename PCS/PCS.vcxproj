@@ -330,6 +330,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="src\config.cpp" />
     <ClCompile Include="src\DisjointSets.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Solution.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base.h" />
@@ -337,6 +338,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClInclude Include="src\config.h" />
     <ClInclude Include="src\DisjointSets.h" />
     <ClInclude Include="src\geometry.h" />
+    <ClInclude Include="src\Solution.h" />
     <ClInclude Include="src\Vector3D.h" />
   </ItemGroup>
   <ItemGroup>

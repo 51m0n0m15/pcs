@@ -490,10 +490,10 @@ set<int> BoundaryComplex::getNeighbors(int index){
 }
 
 
-void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold, int minClusterSize, int clusterNo){
+void BoundaryComplex::doClustering(Solution *s){
 	set<int> unlabeled;
-	for(int i=0; i<clustering->size(); i++)
-		if(clustering->at(i)==0)
+	for(int i=0; i<s->clustering->size(); i++)
+		if(s->clustering->at(i)==0)
 			unlabeled.insert(i);
 	
 	while(!unlabeled.empty()){
@@ -518,7 +518,7 @@ void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold,
 					float distance = sqrt(pow(v1[0]-v2[0],2)+
 											pow(v1[1]-v2[1],2)+
 											pow(v1[2]-v2[2],2));
-					if(distance<=distThreshold){
+					if(distance<=s->max_exp/config::clusterDistThreshold){
 						queue.push_back(*neighbor);
 						cluster.insert(*neighbor);
 						unlabeled.erase(neighbor);
@@ -527,12 +527,12 @@ void BoundaryComplex::doClustering(vector<int> *clustering, float distThreshold,
 			}
 		}
 
-		if(cluster.size()>=minClusterSize){
+		if(cluster.size() >= s->cloud->size()/config::minClusterSize){
 			for(set<int>::iterator iter = cluster.begin(); iter!=cluster.end(); iter++){
-				clustering->at(*iter)=clusterNo;
+				s->clustering->at(*iter)=s->cluster_count;
 			}
-			cout << "Cluster "<<clusterNo<<": " << cluster.size() << " data points." << endl;
-			clusterNo++;
+			cout << "Cluster "<<s->cluster_count<<": " << cluster.size() << " data points." << endl;
+			s->cluster_count++;
 		}
 
 	}
