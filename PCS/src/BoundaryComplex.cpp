@@ -518,7 +518,7 @@ void BoundaryComplex::doClustering(Solution *s){
 					float distance = sqrt(pow(v1[0]-v2[0],2)+
 											pow(v1[1]-v2[1],2)+
 											pow(v1[2]-v2[2],2));
-					if(distance<=s->max_exp/config::clusterDistThreshold){
+					if(distance<=s->dist_threshold){
 						queue.push_back(*neighbor);
 						cluster.insert(*neighbor);
 						unlabeled.erase(neighbor);

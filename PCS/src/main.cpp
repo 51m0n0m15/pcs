@@ -31,13 +31,13 @@ Solution *plane_bc;
 BoundaryComplex *bc;
 
 
-void visualize (PointCloud<PointXYZRGB>::Ptr cloud) {
-	visualization::CloudViewer viewer ("Simple Cloud Viewer");
-	viewer.showCloud (cloud);
+void visualize (Solution *s) {
+	visualization::CloudViewer viewer (s->name);
+	viewer.showCloud (s->cloud);
 	while (!viewer.wasStopped ()){}
 }
 
-
+/*
 PointCloud<PointXYZRGB>::Ptr filter(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	// calculate leaf size for downsampling
 	PointXYZRGB min;
@@ -53,7 +53,7 @@ PointCloud<PointXYZRGB>::Ptr filter(PointCloud<PointXYZRGB>::Ptr cloud_in){
 	vg.filter (*cloud_filtered);
 	cout << "PointCloud after filtering has: " << cloud_filtered->points.size ()  << " data points." << endl;
 	return cloud_filtered;
-}
+}*/
 
 
 /*
@@ -138,7 +138,7 @@ void planeKnn(){
 	tree->setInputCloud (cloud_filtered);	//hier absturz bei manchen clouds
 	vector<PointIndices> cluster_indices;
 	EuclideanClusterExtraction<PointXYZRGB> ec;
-	ec.setClusterTolerance (plane_knn->max_exp/config::clusterDistThreshold);
+	ec.setClusterTolerance (plane_knn->dist_threshold);
 	ec.setMinClusterSize (pointCount/config::minClusterSize);
 	//ec.setMaxClusterSize (cloud_in->size()/2);
 	ec.setSearchMethod (tree);
@@ -304,8 +304,8 @@ double compare(Solution *a, Solution *b){
 		else
 			f1measure = 2*(precision*recall/(precision+recall));
 
-		cout << "Cluster "  << j << ":	prec " << precision << "		rec " 
-			<< recall << "	F1 " << f1measure << endl;
+		cout << "Cluster "  << j << ": prec " << precision << " rec " 
+			<< recall << " F1 " << f1measure << endl;
 		j++;
 
 		total_f1measure+= f1measure*((double)(iter->size())/
@@ -345,19 +345,20 @@ int main (int argc, char** argv)
 		return(0);
 	}
 
-	//downsampling
-	input_cloud=filter(input_cloud);
-
+	//downsampling (also interpolates colors->bad)
+	//input_cloud=filter(input_cloud);
 	pointCount = input_cloud->points.size();
 
 	//initialize different solutions
-	input = new Solution(input_cloud);
-	plane_knn = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))));
-	plane_bc = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))));
+	input = new Solution(input_cloud, "input");
+	input->cluster_cloud_from_coloring();
+	plane_knn = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "planeKnn");
+	plane_bc = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "planeBc");
 
 
 	//construct the boundary complex for filtered input data
 	bc = new BoundaryComplex(input->cloud);
+
 
 	//handle user commands
 	string in;
@@ -365,10 +366,17 @@ int main (int argc, char** argv)
 		cin >> in;
 
 		if(string(in)=="showinput"){
-			boost::thread(visualize, input->cloud);
+			boost::thread(visualize, input);
 			continue;
 		}
-
+		if(string(in)=="showplaneknn"){
+			boost::thread(visualize, plane_knn);
+			continue;
+		}
+		if(string(in)=="showplanebc"){
+			boost::thread(visualize, plane_bc);
+			continue;
+		}
 
 
 
@@ -376,10 +384,13 @@ int main (int argc, char** argv)
 			planeKnn();
 			continue;
 		}
-		if(string(in)=="showplaneknn"){
-			boost::thread(visualize, plane_knn->cloud);
+		if(string(in)=="planebc"){
+			planeBc();
 			continue;
 		}
+		
+
+
 		if(string(in)=="saveplaneknn"){
 			if(pcd){
 				PCDWriter writer;
@@ -393,18 +404,6 @@ int main (int argc, char** argv)
 				writer.write<PointXYZRGB> (ss.str (), *(plane_knn->cloud), false);
 			}
 			cout << "segmented cloud has been saved to planeKnn_" << filename << endl;
-			continue;
-		}
-
-
-
-
-		if(string(in)=="planebc"){
-			planeBc();
-			continue;
-		}
-		if(string(in)=="showplanebc"){
-			boost::thread(visualize, plane_bc->cloud);
 			continue;
 		}
 		if(string(in)=="saveplanebc"){
@@ -424,15 +423,21 @@ int main (int argc, char** argv)
 		}
 
 
-		if(string(in)=="compare"){
+		if(string(in)=="compareplaneknn"){
 			if(!plane_knn->clustering_done)
 				planeKnn();
-			if(!plane_bc->clustering_done)
-				planeBc();
-			double f1 = compare(plane_knn, plane_bc);
+			double f1 = compare(input, plane_knn);
 			cout << "F1-Measure of compared solutions: " << f1 << endl;
 			continue;
 		}
+		if(string(in)=="compareplanebc"){
+			if(!plane_bc->clustering_done)
+				planeBc();
+			double f1 = compare(input, plane_bc);
+			cout << "F1-Measure of compared solutions: " << f1 << endl;
+			continue;
+		}
+
 
 		if(string(in)=="exit"){
 			break;
