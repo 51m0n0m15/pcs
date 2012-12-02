@@ -405,7 +405,6 @@ void regionBc(){
 		while(!queue.empty()){
 			list<int>::iterator curPoint = queue.begin();
 			set<int> neighbors = bc->getNeighbors(*curPoint);
-			vector<float> distances; 
 			queue.pop_front();
 
 			for(set<int>::iterator iter=neighbors.begin(); iter!=neighbors.end(); iter++){
@@ -436,7 +435,7 @@ void regionBc(){
 
 		if(cluster.size() >= region_bc->cloud->size()/config::min_cluster_size){
 			for(set<int>::iterator iter = cluster.begin(); iter!=cluster.end(); iter++){
-				region_bc->clustering->at(*iter)=region_knn->cluster_count;
+				region_bc->clustering->at(*iter)=region_bc->cluster_count;
 			}
 			cout << "Cluster "<<region_bc->cluster_count<<": " << cluster.size() << " data points." << endl;
 			region_bc->cluster_count++;

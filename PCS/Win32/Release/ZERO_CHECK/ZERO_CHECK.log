@@ -1,4 +1,4 @@
-﻿Build started 02.12.2012 14:00:37.
+﻿Build started 02.12.2012 15:08:17.
      1>Project "C:\cpp-workspace\pcs\PCS\ZERO_CHECK.vcxproj" on node 2 (build target(s)).
      1>InitializeBuildStatus:
          Creating "Win32\Release\ZERO_CHECK\ZERO_CHECK.unsuccessfulbuild" because "AlwaysCreate" was specified.
@@ -9,4 +9,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:00.11
+Time Elapsed 00:00:00.06
