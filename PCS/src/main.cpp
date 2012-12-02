@@ -11,6 +11,7 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/visualization/cloud_viewer.h>
+#include <pcl/features/principal_curvatures.h>
 #include <regex>
 #include <boost/thread/thread.hpp>
 
@@ -27,6 +28,8 @@ int pointCount;
 Solution *input;
 Solution *plane_knn;
 Solution *plane_bc;
+Solution *region_knn;
+Solution *region_bc;
 
 BoundaryComplex *bc;
 
@@ -39,20 +42,20 @@ void visualize (Solution *s) {
 
 /*
 PointCloud<PointXYZRGB>::Ptr filter(PointCloud<PointXYZRGB>::Ptr cloud_in){
-	// calculate leaf size for downsampling
-	PointXYZRGB min;
-	PointXYZRGB max;
-	getMinMax3D(*cloud_in, min, max);
-	float ls = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z))/config::filterLeafSize;
+// calculate leaf size for downsampling
+PointXYZRGB min;
+PointXYZRGB max;
+getMinMax3D(*cloud_in, min, max);
+float ls = std::max(max.x-min.x,std::max(max.y-min.y, max.z-min.z))/config::filterLeafSize;
 
-	// Create the filtering object: downsample the dataset using a leaf size of 1cm
-	VoxelGrid<PointXYZRGB> vg;
-	PointCloud<PointXYZRGB>::Ptr cloud_filtered (new PointCloud<PointXYZRGB>);
-	vg.setInputCloud (cloud_in);
-	vg.setLeafSize (ls, ls, ls);
-	vg.filter (*cloud_filtered);
-	cout << "PointCloud after filtering has: " << cloud_filtered->points.size ()  << " data points." << endl;
-	return cloud_filtered;
+// Create the filtering object: downsample the dataset using a leaf size of 1cm
+VoxelGrid<PointXYZRGB> vg;
+PointCloud<PointXYZRGB>::Ptr cloud_filtered (new PointCloud<PointXYZRGB>);
+vg.setInputCloud (cloud_in);
+vg.setLeafSize (ls, ls, ls);
+vg.filter (*cloud_filtered);
+cout << "PointCloud after filtering has: " << cloud_filtered->points.size ()  << " data points." << endl;
+return cloud_filtered;
 }*/
 
 
@@ -81,7 +84,7 @@ void planeKnn(){
 	seg.setModelType (SACMODEL_PLANE);
 	seg.setMethodType (SAC_RANSAC);
 	seg.setMaxIterations (100);
-	seg.setDistanceThreshold (plane_knn->max_exp/config::planeDistThreshold);
+	seg.setDistanceThreshold (plane_knn->max_exp/config::plane_dist_threshold);
 
 	//int i=0, nr_points = (int) cloud_filtered->points.size ();
 	//while (cloud_filtered->points.size () > 0.3 * nr_points)
@@ -139,7 +142,7 @@ void planeKnn(){
 	vector<PointIndices> cluster_indices;
 	EuclideanClusterExtraction<PointXYZRGB> ec;
 	ec.setClusterTolerance (plane_knn->dist_threshold);
-	ec.setMinClusterSize (pointCount/config::minClusterSize);
+	ec.setMinClusterSize (pointCount/config::min_cluster_size);
 	//ec.setMaxClusterSize (cloud_in->size()/2);
 	ec.setSearchMethod (tree);
 	ec.setInputCloud (cloud_filtered);
@@ -204,7 +207,7 @@ void planeBc(){
 	seg.setModelType (SACMODEL_PLANE);
 	seg.setMethodType (SAC_RANSAC);
 	seg.setMaxIterations (100);
-	seg.setDistanceThreshold (plane_bc->max_exp/config::planeDistThreshold);
+	seg.setDistanceThreshold (plane_bc->max_exp/config::plane_dist_threshold);
 
 
 	while (true)
@@ -259,10 +262,192 @@ void planeBc(){
 	bc->doClustering(plane_bc);
 
 	plane_bc->clustering_done=true;
-	
+
 	plane_bc->color_cloud_from_clustering();
 
+
+	cout << "Segmentation done." << endl;
+}
+
+
+void regionKnn(){
+
+	//compute normals
+	search::Search<PointXYZRGB>::Ptr tree = boost::shared_ptr<search::Search<PointXYZRGB> > (new search::KdTree<PointXYZRGB>);
+	PointCloud <Normal>::Ptr normals (new pcl::PointCloud <pcl::Normal>);
+	NormalEstimation<PointXYZRGB, Normal> normal_estimator;
+	normal_estimator.setSearchMethod (tree);
+	normal_estimator.setInputCloud (region_knn->cloud);
+	normal_estimator.setKSearch (config::normal_est_k);
+	normal_estimator.compute (*normals);
+
+	// Creating the KdTree object for the search method of the extraction
+	search::KdTree<PointXYZRGB>::Ptr kdTree (new search::KdTree<pcl::PointXYZRGB>);
+	kdTree->setInputCloud (region_knn->cloud);
+
+	set<int> unlabeled;
+	for(int i=0; i<region_knn->clustering->size(); i++)
+		if(region_knn->clustering->at(i)==0)
+			unlabeled.insert(i);
 	
+	region_knn->cluster_count=1;
+
+	while(!unlabeled.empty()){
+		list<int> queue;
+		set<int> cluster;
+
+		
+		int seed=0;
+		float min_curvature=FLT_MAX;
+		for(set<int>::iterator iter=unlabeled.begin(); iter!=unlabeled.end(); iter++){
+			if(normals->at(*iter).curvature<min_curvature){
+				seed=*iter;
+				min_curvature = normals->at(*iter).curvature;
+			}
+		}
+
+		queue.push_back(seed);
+		cluster.insert(seed);
+		unlabeled.erase(seed);
+		
+		while(!queue.empty()){
+			list<int>::iterator curPoint = queue.begin();
+			vector<int> neighbors;
+			vector<float> distances;
+			kdTree->nearestKSearch(region_knn->cloud->at(*curPoint), config::region_growing_k, neighbors, distances); 
+			queue.pop_front();
+
+			for(vector<int>::iterator iter=neighbors.begin(); iter!=neighbors.end(); iter++){
+				set<int>::iterator neighbor = unlabeled.find(*iter);
+				if(neighbor!=unlabeled.end()){
+					
+					float normal_diff = acos((normals->at(*neighbor).normal_x*normals->at(*curPoint).normal_x+
+												normals->at(*neighbor).normal_y*normals->at(*curPoint).normal_y+
+												normals->at(*neighbor).normal_z*normals->at(*curPoint).normal_z)
+												/
+												(sqrt(pow(normals->at(*neighbor).normal_x,2)+
+														pow(normals->at(*neighbor).normal_y,2)+
+														pow(normals->at(*neighbor).normal_z,2))*
+												 sqrt(pow(normals->at(*curPoint).normal_x,2)+
+														pow(normals->at(*curPoint).normal_y,2)+
+														pow(normals->at(*curPoint).normal_z,2))
+														));
+					
+					if(normal_diff<config::normal_diff_threshold){
+						cluster.insert(*neighbor);
+						unlabeled.erase(neighbor);
+						if(normals->at(*curPoint).curvature<config::curvature_threshold)
+							queue.push_back(*neighbor);
+					}
+				}
+			}
+		}
+
+		if(cluster.size() >= region_knn->cloud->size()/config::min_cluster_size){
+			for(set<int>::iterator iter = cluster.begin(); iter!=cluster.end(); iter++){
+				region_knn->clustering->at(*iter)=region_knn->cluster_count;
+			}
+			cout << "Cluster "<<region_knn->cluster_count<<": " << cluster.size() << " data points." << endl;
+			region_knn->cluster_count++;
+		}
+
+	}
+	
+	region_knn->clustering_done=true;
+
+	region_knn->color_cloud_from_clustering();
+
+	cout << "Segmentation done." << endl;
+}
+
+
+
+
+void regionBc(){
+	//compute normals
+	search::Search<PointXYZRGB>::Ptr tree = boost::shared_ptr<search::Search<PointXYZRGB> > (new search::KdTree<PointXYZRGB>);
+	PointCloud <Normal>::Ptr normals (new pcl::PointCloud <pcl::Normal>);
+	NormalEstimation<PointXYZRGB, Normal> normal_estimator;
+	normal_estimator.setSearchMethod (tree);
+	normal_estimator.setInputCloud (region_bc->cloud);
+	normal_estimator.setKSearch (config::normal_est_k);
+	normal_estimator.compute (*normals);
+
+	// Creating the KdTree object for the search method of the extraction
+	search::KdTree<PointXYZRGB>::Ptr kdTree (new search::KdTree<pcl::PointXYZRGB>);
+	kdTree->setInputCloud (region_bc->cloud);
+
+	set<int> unlabeled;
+	for(int i=0; i<region_bc->clustering->size(); i++)
+		if(region_bc->clustering->at(i)==0)
+			unlabeled.insert(i);
+	
+	region_bc->cluster_count=1;
+
+	while(!unlabeled.empty()){
+		list<int> queue;
+		set<int> cluster;
+
+		
+		int seed=0;
+		float min_curvature=FLT_MAX;
+		for(set<int>::iterator iter=unlabeled.begin(); iter!=unlabeled.end(); iter++){
+			if(normals->at(*iter).curvature<min_curvature){
+				seed=*iter;
+				min_curvature = normals->at(*iter).curvature;
+			}
+		}
+
+		queue.push_back(seed);
+		cluster.insert(seed);
+		unlabeled.erase(seed);
+		
+		while(!queue.empty()){
+			list<int>::iterator curPoint = queue.begin();
+			set<int> neighbors = bc->getNeighbors(*curPoint);
+			vector<float> distances; 
+			queue.pop_front();
+
+			for(set<int>::iterator iter=neighbors.begin(); iter!=neighbors.end(); iter++){
+				set<int>::iterator neighbor = unlabeled.find(*iter);
+				if(neighbor!=unlabeled.end()){
+					
+					float normal_diff = acos((normals->at(*neighbor).normal_x*normals->at(*curPoint).normal_x+
+												normals->at(*neighbor).normal_y*normals->at(*curPoint).normal_y+
+												normals->at(*neighbor).normal_z*normals->at(*curPoint).normal_z)
+												/
+												(sqrt(pow(normals->at(*neighbor).normal_x,2)+
+														pow(normals->at(*neighbor).normal_y,2)+
+														pow(normals->at(*neighbor).normal_z,2))*
+												 sqrt(pow(normals->at(*curPoint).normal_x,2)+
+														pow(normals->at(*curPoint).normal_y,2)+
+														pow(normals->at(*curPoint).normal_z,2))
+														));
+					
+					if(normal_diff<config::normal_diff_threshold){
+						cluster.insert(*neighbor);
+						unlabeled.erase(neighbor);
+						if(normals->at(*curPoint).curvature<config::curvature_threshold)
+							queue.push_back(*neighbor);
+					}
+				}
+			}
+		}
+
+		if(cluster.size() >= region_bc->cloud->size()/config::min_cluster_size){
+			for(set<int>::iterator iter = cluster.begin(); iter!=cluster.end(); iter++){
+				region_bc->clustering->at(*iter)=region_knn->cluster_count;
+			}
+			cout << "Cluster "<<region_bc->cluster_count<<": " << cluster.size() << " data points." << endl;
+			region_bc->cluster_count++;
+		}
+
+	}
+	
+	region_bc->clustering_done=true;
+
+	region_bc->color_cloud_from_clustering();
+
 	cout << "Segmentation done." << endl;
 }
 
@@ -281,7 +466,7 @@ double compare(Solution *a, Solution *b){
 	int j=1;
 	//iteratr over all clusters in a
 	for(vector<vector<int>>::iterator iter=++_a.begin(); iter!=_a.end(); iter++){
-		
+
 		//find cluster in b which has most elements in current cluster of a
 		vector<int> hist(iter->size(), 0);
 		for(vector<int>::iterator it=iter->begin(); it!=iter->end(); it++){
@@ -297,7 +482,7 @@ double compare(Solution *a, Solution *b){
 		}
 		double precision = (double)a_and_b / (double)(_b[cluster_b].size());
 		double recall = (double)a_and_b / (double)(iter->size());
-		
+
 		double f1measure;
 		if(precision+recall==0)	//divide by 0
 			f1measure = 0;
@@ -319,7 +504,7 @@ double compare(Solution *a, Solution *b){
 int main (int argc, char** argv)
 {
 	config::readConfig();
-	
+
 	PointCloud<PointXYZRGB>::Ptr input_cloud(new PointCloud<PointXYZRGB>());
 
 	if(argc<2){
@@ -327,7 +512,7 @@ int main (int argc, char** argv)
 		return(0);
 	}
 	string filename = argv[1];
-	
+
 	bool pcd;	//true if input file is .pcd, false if it's .ply
 	//load file
 	if(regex_match(filename, regex("(.*)(\.pcd)"))){
@@ -354,10 +539,19 @@ int main (int argc, char** argv)
 	input->cluster_cloud_from_coloring();
 	plane_knn = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "planeKnn");
 	plane_bc = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "planeBc");
+	region_knn = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "regionKnn");
+	region_bc = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "regionBc");
 
 
 	//construct the boundary complex for filtered input data
 	bc = new BoundaryComplex(input->cloud);
+
+
+
+
+
+
+
 
 
 	//handle user commands
@@ -377,6 +571,14 @@ int main (int argc, char** argv)
 			boost::thread(visualize, plane_bc);
 			continue;
 		}
+		if(string(in)=="showregionknn"){
+			boost::thread(visualize, region_knn);
+			continue;
+		}
+		if(string(in)=="showregionbc"){
+			boost::thread(visualize, region_bc);
+			continue;
+		}
 
 
 
@@ -388,7 +590,15 @@ int main (int argc, char** argv)
 			planeBc();
 			continue;
 		}
-		
+		if(string(in)=="regionknn"){
+			regionKnn();
+			continue;
+		}
+		if(string(in)=="regionbc"){
+			regionBc();
+			continue;
+		}
+
 
 
 		if(string(in)=="saveplaneknn"){
@@ -437,6 +647,20 @@ int main (int argc, char** argv)
 			cout << "F1-Measure of compared solutions: " << f1 << endl;
 			continue;
 		}
+		if(string(in)=="compareregionknn"){
+			if(!region_knn->clustering_done)
+				regionKnn();
+			double f1 = compare(input, region_knn);
+			cout << "F1-Measure of compared solutions: " << f1 << endl;
+			continue;
+		}
+		if(string(in)=="compareregionbc"){
+			if(!region_bc->clustering_done)
+				regionBc();
+			double f1 = compare(input, region_bc);
+			cout << "F1-Measure of compared solutions: " << f1 << endl;
+			continue;
+		}
 
 
 		if(string(in)=="exit"){
@@ -444,17 +668,26 @@ int main (int argc, char** argv)
 		}
 
 		cout << "valid commands: " << endl <<
-			"	showinput" << endl <<
-
 			"	planeknn" << endl <<
-			"	showplaneknn" << endl <<
-			"	saveplaneknn" << endl <<
-
 			"	planebc" << endl <<
-			"	showplanebc" << endl <<
-			"	saveplanebc" << endl <<
+			"	regionknn" << endl <<
+			"	regionbc" << endl <<
 
-			"	compare" << endl <<
+			"	showinput" << endl <<
+			"	showplaneknn" << endl <<
+			"	showplanebc" << endl <<
+			"	showregionknn" << endl <<
+			"	showregionbc" << endl <<
+
+			"	saveplaneknn" << endl <<
+			"	saveplanebc" << endl <<
+			"	saveregionknn" << endl <<
+			"	saveregionbc" << endl <<
+
+			"	compareplaneknn" << endl <<
+			"	compareplanebc" << endl <<
+			"	compareregionknn" << endl <<
+			"	compareregionbc" << endl <<
 
 			"	exit" << endl;
 	}

@@ -18,7 +18,7 @@ Solution::Solution(PointCloud<PointXYZRGB>::Ptr _cloud, string _name){
 	max_exp = std::max(expX,std::max(expY, expZ));
 
 	//definition of distance threshold adaption according to spacial expansion and point count
-	dist_threshold = pow((double)(expX*expY*expZ),(double)(2/3)) / cloud->size() * config::clusterDistThreshold;
+	dist_threshold = pow((double)(expX*expY*expZ),(double)(2/3)) / cloud->size() * config::cluster_dist_threshold;
 }
 
 void Solution::color_cloud_from_clustering(){
@@ -69,7 +69,6 @@ void Solution::cluster_cloud_from_coloring(){
 		if(!found){
 			known_colors.push_back(color);
 			clustering->at(i)=known_colors.size()-1;
-			cout << color << endl;
 		}
 		
 		i++;

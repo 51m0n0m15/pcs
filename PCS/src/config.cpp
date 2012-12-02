@@ -9,10 +9,14 @@ config::~config(void)
 {
 }
 //statische variablen muessen hier initialisiert werden, aus irgendeinem grund
-int config::filterLeafSize=200;
-int config::planeDistThreshold=100;
-int config::clusterDistThreshold=100;
-int config::minClusterSize=500;
+int config::filter_leaf_size=200;
+int config::plane_dist_threshold=100;
+int config::cluster_dist_threshold=100;
+int config::min_cluster_size=500;
+float config::normal_diff_threshold=0.1;
+int config::curvature_threshold=1;
+int config::normal_est_k=50;
+int config::region_growing_k=30;
 
 void config::readConfig(){
 
@@ -33,25 +37,49 @@ void config::readConfig(){
 		if(buffer[0] == 'f' && buffer[1] == 'l' && buffer[2] == 's'){
 			int tmp;
 			fscanf(configFile, "%d", &tmp);
-			config::filterLeafSize = tmp;
+			config::filter_leaf_size = tmp;
 		}
 
 		if(buffer[0] == 'p' && buffer[1] == 'd' && buffer[2] == 't'){
 			int tmp;
 			fscanf(configFile, "%d", &tmp);
-			config::planeDistThreshold = tmp;
+			config::plane_dist_threshold = tmp;
 		}
 
 		if(buffer[0] == 'c' && buffer[1] == 'd' && buffer[2] == 't'){
 			int tmp;
 			fscanf(configFile, "%d", &tmp);
-			config::clusterDistThreshold = tmp;
+			config::cluster_dist_threshold = tmp;
 		}
 
 		if(buffer[0] == 'm' && buffer[1] == 'c' && buffer[2] == 's'){
 			int tmp;
 			fscanf(configFile, "%d", &tmp);
-			config::minClusterSize = tmp;
+			config::min_cluster_size = tmp;
+		}
+
+		if(buffer[0] == 'n' && buffer[1] == 'd' && buffer[2] == 't'){
+			float tmp;
+			fscanf(configFile, "%f", &tmp);
+			config::normal_diff_threshold = tmp;
+		}
+
+		if(buffer[0] == 'c' && buffer[1] == 'u' && buffer[2] == 't'){
+			int tmp;
+			fscanf(configFile, "%d", &tmp);
+			config::curvature_threshold = tmp;
+		}
+
+		if(buffer[0] == 'n' && buffer[1] == 'e' && buffer[2] == 'k'){
+			int tmp;
+			fscanf(configFile, "%d", &tmp);
+			config::normal_est_k = tmp;
+		}
+
+		if(buffer[0] == 'r' && buffer[1] == 'g' && buffer[2] == 'k'){
+			int tmp;
+			fscanf(configFile, "%d", &tmp);
+			config::region_growing_k = tmp;
 		}
 
 	}

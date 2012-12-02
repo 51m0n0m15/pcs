@@ -527,7 +527,7 @@ void BoundaryComplex::doClustering(Solution *s){
 			}
 		}
 
-		if(cluster.size() >= s->cloud->size()/config::minClusterSize){
+		if(cluster.size() >= s->cloud->size()/config::min_cluster_size){
 			for(set<int>::iterator iter = cluster.begin(); iter!=cluster.end(); iter++){
 				s->clustering->at(*iter)=s->cluster_count;
 			}
