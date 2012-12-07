@@ -13,7 +13,6 @@ class BoundaryComplex{
 public:
 	BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in);
 	~BoundaryComplex();
-	void doClustering(Solution *s);
 	set<int> getNeighbors(int index);
 
 private:

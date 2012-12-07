@@ -16,7 +16,6 @@ public:
 	bool clustering_done;
 	int cluster_count;
 	float max_exp;
-	float dist_threshold;
 	string name;
 	
 	Solution::Solution(PointCloud<PointXYZRGB>::Ptr _cloud, string _name);

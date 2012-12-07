@@ -489,57 +489,6 @@ set<int> BoundaryComplex::getNeighbors(int index){
 	return neighbors;
 }
 
-
-void BoundaryComplex::doClustering(Solution *s){
-	set<int> unlabeled;
-	for(int i=0; i<s->clustering->size(); i++)
-		if(s->clustering->at(i)==0)
-			unlabeled.insert(i);
-	
-	while(!unlabeled.empty()){
-		list<int> queue;
-		set<int> cluster;
-
-		set<int>::iterator seed = unlabeled.begin();
-		queue.push_back(*seed);
-		cluster.insert(*seed);
-		unlabeled.erase(seed);
-		
-		while(!queue.empty()){
-			list<int>::iterator curPoint = queue.begin();
-			set<int> neighbors = getNeighbors(*curPoint);
-			queue.pop_front();
-
-			for(set<int>::iterator iter=neighbors.begin(); iter!=neighbors.end(); iter++){
-				set<int>::iterator neighbor = unlabeled.find(*iter);
-				if(neighbor!=unlabeled.end()){
-					Vector3D v1 = v[*curPoint].vec;
-					Vector3D v2 = v[*neighbor].vec;
-					float distance = sqrt(pow(v1[0]-v2[0],2)+
-											pow(v1[1]-v2[1],2)+
-											pow(v1[2]-v2[2],2));
-					if(distance<=s->dist_threshold){
-						queue.push_back(*neighbor);
-						cluster.insert(*neighbor);
-						unlabeled.erase(neighbor);
-					}
-				}
-			}
-		}
-
-		if(cluster.size() >= s->cloud->size()/config::min_cluster_size){
-			for(set<int>::iterator iter = cluster.begin(); iter!=cluster.end(); iter++){
-				s->clustering->at(*iter)=s->cluster_count;
-			}
-			cout << "Cluster "<<s->cluster_count<<": " << cluster.size() << " data points." << endl;
-			s->cluster_count++;
-		}
-
-	}
-	
-
-}
-
 //########################################### END INTERESTING ########################################
 
 

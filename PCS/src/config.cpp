@@ -9,14 +9,12 @@ config::~config(void)
 {
 }
 //statische variablen muessen hier initialisiert werden, aus irgendeinem grund
-int config::filter_leaf_size=200;
+int config::noise_level=0;
 int config::plane_dist_threshold=100;
-int config::cluster_dist_threshold=100;
 int config::min_cluster_size=500;
-float config::normal_diff_threshold=0.1;
-int config::curvature_threshold=1;
-int config::normal_est_k=50;
-int config::region_growing_k=30;
+int config::radius_threshold=100;
+int config::outliers_threshold=2;
+
 
 void config::readConfig(){
 
@@ -34,10 +32,10 @@ void config::readConfig(){
 
 	while (fscanf(configFile, "%s", buffer) != EOF){
 		
-		if(buffer[0] == 'f' && buffer[1] == 'l' && buffer[2] == 's'){
+		if(buffer[0] == 'n' && buffer[1] == 'l' && buffer[2] == 'v'){
 			int tmp;
 			fscanf(configFile, "%d", &tmp);
-			config::filter_leaf_size = tmp;
+			config::noise_level = tmp;
 		}
 
 		if(buffer[0] == 'p' && buffer[1] == 'd' && buffer[2] == 't'){
@@ -46,41 +44,25 @@ void config::readConfig(){
 			config::plane_dist_threshold = tmp;
 		}
 
-		if(buffer[0] == 'c' && buffer[1] == 'd' && buffer[2] == 't'){
-			int tmp;
-			fscanf(configFile, "%d", &tmp);
-			config::cluster_dist_threshold = tmp;
-		}
-
 		if(buffer[0] == 'm' && buffer[1] == 'c' && buffer[2] == 's'){
 			int tmp;
 			fscanf(configFile, "%d", &tmp);
 			config::min_cluster_size = tmp;
 		}
 
-		if(buffer[0] == 'n' && buffer[1] == 'd' && buffer[2] == 't'){
-			float tmp;
-			fscanf(configFile, "%f", &tmp);
-			config::normal_diff_threshold = tmp;
-		}
-
-		if(buffer[0] == 'c' && buffer[1] == 'u' && buffer[2] == 't'){
+		if(buffer[0] == 'r' && buffer[1] == 'a' && buffer[2] == 't'){
 			int tmp;
 			fscanf(configFile, "%d", &tmp);
-			config::curvature_threshold = tmp;
+			config::radius_threshold = tmp;
 		}
 
-		if(buffer[0] == 'n' && buffer[1] == 'e' && buffer[2] == 'k'){
+		if(buffer[0] == 'o' && buffer[1] == 'd' && buffer[2] == 't'){
 			int tmp;
 			fscanf(configFile, "%d", &tmp);
-			config::normal_est_k = tmp;
+			config::outliers_threshold = tmp;
 		}
 
-		if(buffer[0] == 'r' && buffer[1] == 'g' && buffer[2] == 'k'){
-			int tmp;
-			fscanf(configFile, "%d", &tmp);
-			config::region_growing_k = tmp;
-		}
+		
 
 	}
  }
