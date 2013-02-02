@@ -77,4 +77,5 @@ void Solution::cluster_cloud_from_coloring(){
 }
 
 Solution::~Solution(){
+	delete clustering;
 }

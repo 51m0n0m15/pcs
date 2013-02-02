@@ -496,11 +496,12 @@ set<int> BoundaryComplex::getNeighbors(int index){
 
 Dt *construct3DDelaunayTriangulation(){
 	int i;
+
 	Dt *dt = new Dt();
 
 	for (i = 0; i < vertexCount; i++){
 		Point point = Point(v[i].vec[0], v[i].vec[1], v[i].vec[2]);
-		DVertex vh = dt->insert(point);
+		DVertex vh = dt->insert(point); //hier absturz
 		vh->info().setIndex(i);
 	}
 
@@ -921,7 +922,7 @@ void writeOFFFile()
 void BoundaryComplex::connect3D()
 {
 	dt = construct3DDelaunayTriangulation();
-
+	
 	createAggregateDataStructure();
 
 	criterionType = 1;	// criterion: longest edge in triangle
@@ -944,6 +945,7 @@ BoundaryComplex::BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in
 	vertexCount = cloud_in->size();	// TODO: why? (for knot.pts)
 	v = new _Vertex[vertexCount];
 	_Vertex vertex;
+
 	int i = 0;
 	for(pcl::PointCloud<pcl::PointXYZRGB>::const_iterator it = cloud_in->points.begin(); it != cloud_in->points.end(); ++it){
 		Vector3D vec;
@@ -962,5 +964,6 @@ BoundaryComplex::BoundaryComplex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_in
 
 
 BoundaryComplex::~BoundaryComplex(){
-
+	delete v;
+	delete dt;
 }

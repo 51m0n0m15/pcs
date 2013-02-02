@@ -49,11 +49,6 @@ void makeNoisy(Solution *s){
 }
 
 
-/*
-noch variierbar:
-- maximale iterationen für plane segmentation (momentan: 100)
-- abbruch der plane-segmentation-schleife (momentan: letzte ebene kleiner als cloud_input->size()/10)
-*/
 PointCloud<PointXYZRGB>::Ptr ransac(Solution *s){
 
 	PointCloud<PointXYZRGB>::Ptr cloud_filtered (s->cloud), cloud_f(new PointCloud<PointXYZRGB>);
@@ -67,7 +62,7 @@ PointCloud<PointXYZRGB>::Ptr ransac(Solution *s){
 	seg.setModelType (SACMODEL_PLANE);
 	seg.setMethodType (SAC_RANSAC);
 	seg.setMaxIterations (100);
-	seg.setDistanceThreshold (s->max_exp/config::plane_dist_threshold);
+	seg.setDistanceThreshold ((s->max_exp/(double)1000)*(double)config::plane_dist_threshold);
 
 	//int i=0, nr_points = (int) cloud_filtered->points.size ();
 	//while (cloud_filtered->points.size () > 0.3 * nr_points)
@@ -93,7 +88,7 @@ PointCloud<PointXYZRGB>::Ptr ransac(Solution *s){
 		extract.filter (*cloud_plane);
 
 		//!!!!!!BREAK CONDITION!!!!!!!
-		if(cloud_plane->size() < pointCount/10) break;
+		if(cloud_plane->size() < pointCount/config::ransac_break) break;
 		//size_last_plane = cloud_plane->size();
 
 
@@ -126,6 +121,7 @@ PointCloud<PointXYZRGB>::Ptr ransac(Solution *s){
 
 
 void radiusClustering(Solution *s){
+	cout << "radius-clustering; r=" << config::radius_threshold << endl;
 
 	if(s->clustering_done){
 		cout << "Clustering of solution '" << s->name << "' already done." << endl;
@@ -139,7 +135,7 @@ void radiusClustering(Solution *s){
 	tree->setInputCloud (cloud_filtered);	//hier absturz bei manchen clouds
 	vector<PointIndices> cluster_indices;
 	EuclideanClusterExtraction<PointXYZRGB> ec;
-	ec.setClusterTolerance (s->max_exp/config::radius_threshold);//TODO: was gscheiteres
+	ec.setClusterTolerance ((s->max_exp/(double)1000)*(double)config::radius_threshold);//TODO: was gscheiteres
 	ec.setMinClusterSize (pointCount/config::min_cluster_size);
 	ec.setSearchMethod (tree);
 	ec.setInputCloud (cloud_filtered);
@@ -179,15 +175,20 @@ void radiusClustering(Solution *s){
 }
 
 
-void bcClustering(Solution *s){
-
+float bcClustering(Solution *s){
+	cout << "bc-clustering; c=" << config::outliers_threshold << endl;
+	
 	if(s->clustering_done){
 		cout << "Clustering of solution '" << s->name << "' already done." << endl;
-		return;
+		return 0;
 	}
 
 	ransac(s);
 	
+	long neighbor_count=0;
+	int processed_points=0;
+	int outliers_count=0;
+
 	set<int> unlabeled;
 	for(int i=0; i<s->clustering->size(); i++)
 		if(s->clustering->at(i)==0)
@@ -205,6 +206,8 @@ void bcClustering(Solution *s){
 		while(!queue.empty()){
 			list<int>::iterator curPoint = queue.begin();
 			set<int> neighbors = boundaryComplex->getNeighbors(*curPoint);
+			neighbor_count+=neighbors.size();
+			processed_points++;
 			queue.pop_front();
 			
 			//find median distance of neighbors to eliminate outliers
@@ -238,7 +241,7 @@ void bcClustering(Solution *s){
 						queue.push_back(*neighbor);
 						cluster.insert(*neighbor);
 						unlabeled.erase(neighbor);
-					}
+					} else outliers_count++;
 				}
 			}
 		}
@@ -257,28 +260,25 @@ void bcClustering(Solution *s){
 
 	s->color_cloud_from_clustering();
 
+	float avg_neighbors = (float)neighbor_count/(float)processed_points;
 
-	cout << "Segmentation done." << endl;
+	cout << "Segmentation done. Average number of neighbors: " << avg_neighbors 
+		<<"   outliers detected: " << outliers_count << endl;
+
+	return avg_neighbors;
 }
 
-//TODO
+
 void knnClustering(Solution *s){
-	/*
+	cout << "knn-clustering; k=" << config::k << endl;
 	if(s->clustering_done){
 		cout << "Clustering of solution '" << s->name << "' already done." << endl;
 		return;
 	}
 
-	//compute normals
-	search::Search<PointXYZRGB>::Ptr tree = boost::shared_ptr<search::Search<PointXYZRGB> > (new search::KdTree<PointXYZRGB>);
-	PointCloud <Normal>::Ptr normals (new pcl::PointCloud <pcl::Normal>);
-	NormalEstimation<PointXYZRGB, Normal> normal_estimator;
-	normal_estimator.setSearchMethod (tree);
-	normal_estimator.setInputCloud (s->cloud);
-	normal_estimator.setKSearch (config::normal_est_k);
-	normal_estimator.compute (*normals);
-
-	// Creating the KdTree object for the search method of the extraction
+	ransac(s);
+	
+	//create kd-tree for knn-search
 	search::KdTree<PointXYZRGB>::Ptr kdTree (new search::KdTree<pcl::PointXYZRGB>);
 	kdTree->setInputCloud (s->cloud);
 
@@ -287,82 +287,56 @@ void knnClustering(Solution *s){
 		if(s->clustering->at(i)==0)
 			unlabeled.insert(i);
 	
-	s->cluster_count=1;
-
 	while(!unlabeled.empty()){
 		list<int> queue;
 		set<int> cluster;
 
-		
-		int seed=0;
-		float min_curvature=FLT_MAX;
-		for(set<int>::iterator iter=unlabeled.begin(); iter!=unlabeled.end(); iter++){
-			if(normals->at(*iter).curvature<min_curvature){
-				seed=*iter;
-				min_curvature = normals->at(*iter).curvature;
-			}
-		}
-
-		queue.push_back(seed);
-		cluster.insert(seed);
+		set<int>::iterator seed = unlabeled.begin();
+		queue.push_back(*seed);
+		cluster.insert(*seed);
 		unlabeled.erase(seed);
 		
 		while(!queue.empty()){
 			list<int>::iterator curPoint = queue.begin();
+
 			vector<int> neighbors;
 			vector<float> distances;
-			kdTree->nearestKSearch(s->cloud->at(*curPoint), config::region_growing_k, neighbors, distances); 
+			kdTree->nearestKSearch(s->cloud->at(*curPoint), config::k, neighbors, distances);
 			queue.pop_front();
-
+			
+			
 			for(vector<int>::iterator iter=neighbors.begin(); iter!=neighbors.end(); iter++){
 				set<int>::iterator neighbor = unlabeled.find(*iter);
 				if(neighbor!=unlabeled.end()){
-					
-					float normal_diff = acos((normals->at(*neighbor).normal_x*normals->at(*curPoint).normal_x+
-												normals->at(*neighbor).normal_y*normals->at(*curPoint).normal_y+
-												normals->at(*neighbor).normal_z*normals->at(*curPoint).normal_z)
-												/
-												(sqrt(pow(normals->at(*neighbor).normal_x,2)+
-														pow(normals->at(*neighbor).normal_y,2)+
-														pow(normals->at(*neighbor).normal_z,2))*
-												 sqrt(pow(normals->at(*curPoint).normal_x,2)+
-														pow(normals->at(*curPoint).normal_y,2)+
-														pow(normals->at(*curPoint).normal_z,2))
-														));
-					
-					if(normal_diff<config::normal_diff_threshold){
-						cluster.insert(*neighbor);
-						unlabeled.erase(neighbor);
-						if(normals->at(*curPoint).curvature<config::curvature_threshold)
-							queue.push_back(*neighbor);
-					}
+					queue.push_back(*neighbor);
+					cluster.insert(*neighbor);
+					unlabeled.erase(neighbor);
+				
 				}
 			}
 		}
 
 		if(cluster.size() >= s->cloud->size()/config::min_cluster_size){
+			s->cluster_count++;
 			for(set<int>::iterator iter = cluster.begin(); iter!=cluster.end(); iter++){
 				s->clustering->at(*iter)=s->cluster_count;
 			}
 			cout << "Cluster "<<s->cluster_count<<": " << cluster.size() << " data points." << endl;
-			s->cluster_count++;
 		}
 
 	}
-	
+
 	s->clustering_done=true;
 
 	s->color_cloud_from_clustering();
 
+
 	cout << "Segmentation done." << endl;
-	*/
 }
 
 
-
+//a=ground truth, b=computed
 double compare(Solution *a, Solution *b){
-
-	double total_f1measure=0;
 
 	vector<vector<int>> _a(a->cluster_count+1);	//a+1 because clusters start at 1, label 0 means "doesn't belong to cluster"
 	vector<vector<int>> _b(b->cluster_count+1);
@@ -371,42 +345,141 @@ double compare(Solution *a, Solution *b){
 		_b[b->clustering->at(i)].push_back(i);
 	}
 
-	int j=1;
-	//iteratr over all clusters in a
+
+	double total_precision=0;
+	double total_recall=0;
+
+	//iterate over all clusters in a
 	for(vector<vector<int>>::iterator iter=++_a.begin(); iter!=_a.end(); iter++){
 
-		//find cluster in b which has largest intersection with current cluster in a
-		vector<int> hist(iter->size(), 0);
+		double cluster_precision=0;
+		double cluster_recall=0;
+
+		//count intersections of current cluster of a with clusters of b
+		vector<int> intersections(_b.size(), 0);
 		for(vector<int>::iterator it=iter->begin(); it!=iter->end(); it++){
-			hist[b->clustering->at(*it)]++;
+			intersections[b->clustering->at(*it)]++;
 		}
-		int cluster_b=0;
-		int a_and_b=0;
-		for(int i=1; i<hist.size(); i++){
-			if(hist[i]>a_and_b){
-				a_and_b=hist[i];
-				cluster_b=i;
-			}
+		
+		for(int i=1; i<_b.size(); i++){
+			//conditions according to unsupervised f1-paper
+			if(_a.size()>1)
+				cluster_precision+= (1-(double)(_b.at(i).size()-intersections.at(i)) / 
+									(double)(a->clustering->size()-iter->size())) * (double)intersections.at(i); 
+																					//last thing for weighted accumulation
+			else
+				cluster_precision+=(double)intersections.at(i);
+
+			if(iter->size()>1)
+				cluster_recall+= ((double)(intersections.at(i)-1) / (double)(iter->size()-1)) * (double)intersections.at(i);
+			else
+				cluster_recall+= (double)intersections.at(i);
 		}
-		double precision = (double)a_and_b / (double)(_b[cluster_b].size());
-		double recall = (double)a_and_b / (double)(iter->size());
-
-		double f1measure;
-		if(precision+recall==0)	//divide by 0
-			f1measure = 0;
-		else
-			f1measure = 2*(precision*recall/(precision+recall));
-
-		cout << "Cluster "  << j << ": prec " << precision << " rec " 
-			<< recall << " F1 " << f1measure << endl;
-		j++;
-
-		total_f1measure+= f1measure*((double)(iter->size())/
-			((double)(a->clustering->size()-_a[0].size())));	//weighted
+		
+		total_precision+=cluster_precision;
+		total_recall+=cluster_recall;
 	}
 
-	cout << "Total F1-measure: " << total_f1measure << endl;
-	return total_f1measure;
+	total_precision/=a->clustering->size();
+	total_recall/=a->clustering->size();
+
+	double f1 = 2*((total_precision*total_recall)/(total_precision+total_recall));
+
+	cout << "F1-measure: " << f1 << endl;
+	return f1;
+}
+
+
+void findBestParameters(string filename, PointCloud<PointXYZRGB>::Ptr input_cloud){
+	int best_k=1;
+	int best_r=1;
+	double best_c=1;
+
+	double best_f1=0;
+	
+	for(int j=1; j<=30; j++){
+		config::k=j;
+		knn->~Solution();
+		knn = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "knn");
+		knnClustering(knn);
+		double f1knn = compare(input, knn);
+		if(f1knn > best_f1){
+			best_f1=f1knn;
+			best_k=config::k;
+		}
+	}
+	fstream filestr;
+	filestr.open ("k.txt", fstream::in | fstream::out | fstream::app);
+	filestr << best_k << "	" << filename <<  endl;
+	filestr.close();
+
+	best_f1=0;
+	for(int j=1; j<=100; j+=5){
+		config::radius_threshold=j;
+		radius->~Solution();
+		radius = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "radius");
+		radiusClustering(radius);
+		double f1radius = compare(input, radius);
+		if(f1radius > best_f1){
+			best_f1=f1radius;
+			best_r=config::radius_threshold;
+		}
+	}
+	fstream filestr2;
+	filestr2.open ("r.txt", fstream::in | fstream::out | fstream::app);
+	filestr2 << best_r << "	" << filename <<  endl;
+	filestr2.close();
+
+	best_f1=0;
+	for(double j=1; j<=5; j+=0.2){
+		config::outliers_threshold=j;
+		bc->~Solution();
+		bc = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "bc");
+		bcClustering(bc);
+		double f1bc = compare(input, bc);
+		if(f1bc > best_f1){
+			best_f1=f1bc;
+			best_c=config::outliers_threshold;
+		}
+	}
+	fstream filestr3;
+	filestr3.open ("c.txt", fstream::in | fstream::out | fstream::app);
+	filestr3 << best_c << "	" << filename <<  endl;
+	filestr3.close();
+
+	cout << "done" << endl;
+}
+
+void automatic(string filename, PointCloud<PointXYZRGB>::Ptr input_cloud){
+
+	fstream filestr;
+	filestr.open ("results.txt", fstream::in | fstream::out | fstream::app);
+	//for(int i=0; i<=10; i++){
+	//	config::noise_level=i;
+
+	//	knn->~Solution();
+	//	knn = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "knn");
+	//	makeNoisy(knn);
+		knnClustering(knn);
+		double f1knn = compare(input, knn);
+
+	//	radius->~Solution();
+	//	radius = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "radius");
+	//	makeNoisy(radius);
+		radiusClustering(radius);
+		double f1radius = compare(input, radius);
+
+	//	bc->~Solution();
+	//	bc = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "bc");
+	//	makeNoisy(bc);
+		float avg_neighbors = bcClustering(bc);
+		double f1bc = compare(input, bc);
+
+		filestr << f1knn <<"\t"<< f1radius <<"\t"<< f1bc <<"\t"<< avg_neighbors 
+			<<"\t"<< config::noise_level <<"\t"<< filename << endl;
+	//}
+	filestr.close();
+	cout << "done" << endl;
 }
 
 
@@ -445,12 +518,11 @@ int main (int argc, char** argv)
 	radius = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "radius");
 	bc = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "bc");
 	knn = new Solution(*(new PointCloud<PointXYZRGB>::Ptr(new PointCloud<PointXYZRGB>((*input_cloud)))), "knn");
-
+	
 
 	//construct the boundary complex for filtered input data
 	boundaryComplex = new BoundaryComplex(input->cloud);
-
-
+	
 
 	//handle user commands
 	string in;
@@ -530,7 +602,7 @@ int main (int argc, char** argv)
 			continue;
 		}
 		if(string(in)=="comparebc"){
-			if(!radius->clustering_done){
+			if(!bc->clustering_done){
 				cout << "You have to do the clustering first!" << endl;
 				continue;
 			}
@@ -538,12 +610,22 @@ int main (int argc, char** argv)
 			continue;
 		}
 		if(string(in)=="compareknn"){
-			if(!radius->clustering_done){
+			if(!knn->clustering_done){
 				cout << "You have to do the clustering first!" << endl;
 				continue;
 			}
 			double f1 = compare(input, knn);
 			continue;
+		}
+
+
+		if(string(in)=="param"){
+			findBestParameters(filename, input_cloud);
+			break;
+		}
+		if(string(in)=="auto"){
+			automatic(filename, input_cloud);
+			break;
 		}
 
 
@@ -568,7 +650,10 @@ int main (int argc, char** argv)
 			"	compareradius" << endl <<
 			"	comparebc" << endl <<
 			"	compareknn" << endl <<
-
+			
+			"	param" << endl <<
+			"	auto" << endl <<
+			
 			"	exit" << endl;
 	}
 

@@ -12,7 +12,9 @@ public:
 	static int plane_dist_threshold;
 	static int min_cluster_size;
 	static int radius_threshold;
-	static int outliers_threshold;
+	static float outliers_threshold;
+	static int k;
+	static int ransac_break;
 
 
 	config(void);
