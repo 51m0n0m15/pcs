@@ -335,6 +335,76 @@ void knnClustering(Solution *s){
 }
 
 
+void knnNeighbors(Solution *s){
+	
+	for(PointCloud<PointXYZRGB>::iterator peter=s->cloud->begin(); peter!=s->cloud->end(); peter++){
+		peter->r=0;
+		peter->g=0;
+		peter->b=0;
+	}
+
+	search::KdTree<PointXYZRGB>::Ptr kdTree (new search::KdTree<pcl::PointXYZRGB>);
+	kdTree->setInputCloud (s->cloud);
+		
+	vector<int> neighbors;
+	vector<float> distances;
+	kdTree->nearestKSearch(s->cloud->at(0), config::k, neighbors, distances);
+	
+	for(vector<int>::iterator iter = neighbors.begin(); iter!=neighbors.end(); iter++){
+		s->cloud->at(*iter).b=255;
+	}
+	s->cloud->at(0).r=255;
+	s->cloud->at(0).g=255;
+	s->cloud->at(0).b=255;
+
+	cout << "done" << endl;
+}
+
+void radiusNeighbors(Solution *s){
+	
+	for(PointCloud<PointXYZRGB>::iterator peter=s->cloud->begin(); peter!=s->cloud->end(); peter++){
+		peter->r=0;
+		peter->g=0;
+		peter->b=0;
+	}
+
+	search::KdTree<PointXYZRGB>::Ptr kdTree (new search::KdTree<pcl::PointXYZRGB>);
+	kdTree->setInputCloud (s->cloud);
+		
+	vector<int> neighbors;
+	vector<float> distances;
+	kdTree->radiusSearch(s->cloud->at(0), (s->max_exp/(double)1000)*(double)config::radius_threshold, neighbors, distances);
+	for(vector<int>::iterator iter = neighbors.begin(); iter!=neighbors.end(); iter++){
+		s->cloud->at(*iter).r=255;
+	}
+	s->cloud->at(0).r=255;
+	s->cloud->at(0).g=255;
+	s->cloud->at(0).b=255;
+
+	cout << "done" << endl;
+}
+
+void bcNeighbors(Solution *s){
+	
+	for(PointCloud<PointXYZRGB>::iterator peter=s->cloud->begin(); peter!=s->cloud->end(); peter++){
+		peter->r=0;
+		peter->g=0;
+		peter->b=0;
+	}
+
+	set<int> neighbors = boundaryComplex->getNeighbors(0);
+	
+	for(set<int>::iterator iter = neighbors.begin(); iter!=neighbors.end(); iter++){
+		s->cloud->at(*iter).g=255;
+	}
+	s->cloud->at(0).r=255;
+	s->cloud->at(0).g=255;
+	s->cloud->at(0).b=255;
+
+	cout << "done" << endl;
+}
+
+
 //a=ground truth, b=computed
 double compare(Solution *a, Solution *b){
 
@@ -475,8 +545,9 @@ void automatic(string filename, PointCloud<PointXYZRGB>::Ptr input_cloud){
 		float avg_neighbors = bcClustering(bc);
 		double f1bc = compare(input, bc);
 
-		filestr << f1knn <<"\t"<< f1radius <<"\t"<< f1bc <<"\t"<< avg_neighbors 
-			<<"\t"<< config::noise_level <<"\t"<< filename << endl;
+		filestr << f1knn <<"\t"<< f1radius <<"\t"<< f1bc <<"\t"
+			<< input->cluster_count <<"\t"<< knn->cluster_count <<"\t"<< radius->cluster_count <<"\t"<< bc->cluster_count <<"\t"
+			<< avg_neighbors <<"\t"<< config::noise_level <<"\t"<< filename << endl;
 	//}
 	filestr.close();
 	cout << "done" << endl;
@@ -523,6 +594,9 @@ int main (int argc, char** argv)
 	//construct the boundary complex for filtered input data
 	boundaryComplex = new BoundaryComplex(input->cloud);
 	
+	//automatic(filename, input_cloud);
+	//return(0);
+	
 
 	//handle user commands
 	string in;
@@ -550,14 +624,17 @@ int main (int argc, char** argv)
 
 		if(string(in)=="radius"){
 			radiusClustering(radius);
+			compare(input,radius);
 			continue;
 		}
 		if(string(in)=="bc"){
 			bcClustering(bc);
+			compare(input,bc);
 			continue;
 		}
 		if(string(in)=="knn"){
 			knnClustering(knn);
+			compare(input,knn);
 			continue;
 		}
 
@@ -566,28 +643,28 @@ int main (int argc, char** argv)
 		if(string(in)=="saveradius"){
 			PLYWriter writer;
 			stringstream ss;
-			ss << "radius_" << filename;
+			ss << "radius_" << filename <<".ply";
 			writer.write<PointXYZRGB> (ss.str (), *(radius->cloud), false);
 
-			cout << "segmented cloud has been saved to radius_" << filename << endl;
+			cout << "segmented cloud has been saved to radius_" << filename <<".ply"<< endl;
 			continue;
 		}
 		if(string(in)=="savebc"){
 			PLYWriter writer;
 			stringstream ss;
-			ss << "bc_" << filename;
+			ss << "bc_" << filename<<".ply";
 			writer.write<PointXYZRGB> (ss.str (), *(bc->cloud), false);
 			
-			cout << "segmented cloud has been saved to bc_" << filename << endl;
+			cout << "segmented cloud has been saved to bc_" << filename <<".ply"<< endl;
 			continue;
 		}
 		if(string(in)=="saveknn"){
 			PLYWriter writer;
 			stringstream ss;
-			ss << "knn_" << filename;
+			ss << "knn_" << filename<<".ply";
 			writer.write<PointXYZRGB> (ss.str (), *(knn->cloud), false);
 
-			cout << "segmented cloud has been saved to knn_" << filename << endl;
+			cout << "segmented cloud has been saved to knn_" << filename<<".ply" << endl;
 			continue;
 		}
 		
@@ -628,6 +705,18 @@ int main (int argc, char** argv)
 			break;
 		}
 
+		if(string(in)=="knnn"){
+			knnNeighbors(knn);
+			continue;
+		}
+		if(string(in)=="radiusn"){
+			radiusNeighbors(radius);
+			continue;
+		}
+		if(string(in)=="bcn"){
+			bcNeighbors(bc);
+			continue;
+		}
 
 		if(string(in)=="exit"){
 			break;
